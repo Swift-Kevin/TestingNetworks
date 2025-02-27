@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 // Note: Had to include this so the API would not yell about inet_pton being an issue
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 
 #include <WinSock2.h>
@@ -6,172 +7,164 @@
 #include <WS2tcpip.h>
 
 // Constant Loopback IP for testing
-// ChatGPT: Change if running on a different machine
+// Change if running on a different machine
 const char* SERVER_IP = "127.0.0.1";
 
 // Defining the port and buffer size so I can reuse without having to worry about it
 #define SERVER_PORT 31337
 #define BUFFER_SIZE 512 
 
-int ServerRun()
-{
-	// WSA Data is used to start up the windows sockets.
+struct NetInfo {
 	WSADATA wsaData;
+	SOCKET socket;
+	sockaddr_in addr;
+};
 
-	SOCKET udpSocket;
-	sockaddr_in serverAddr, clientAddr;
-	// Create a buffer with the given size so we can read in messages.
-	// The buffer size is defined at the top
-	char buffer[BUFFER_SIZE];
+void UserInputMsg(char* buffer)
+{
+	std::cout << "Enter message: ";
+	std::cin >> buffer;
+	std::cin.clear();
+	std::cin.ignore(INT_MAX, '\n');
+	buffer[BUFFER_SIZE - 1] = '\0';
+}
 
-	// ChatGPT: Step 1: Initialize Winsock
+void CloseConnection(SOCKET _toClose)
+{
+	closesocket(_toClose);
+	WSACleanup();
+}
 
+int SetupConnection(NetInfo& connection, unsigned long _ip)
+{
 	// we are passing (2,2) in because we want to use Winsock Vers. 2.2 to communicate with
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+	if (WSAStartup(MAKEWORD(2, 2), &connection.wsaData) != 0) {
 		std::cout << "WSAStartup failed!\n";
 		return 1;
 	}
 
-	// ChatGPT: Step 2: Create UDP socket
-
 	// - AF INET = tcp and udp layers 
 	// - data gram = connectionless, unreliable buffers of a fixed maximum length
 	// - 0 = no protocol specified, the service provider will decide!
-	udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	connection.socket = socket(AF_INET, SOCK_DGRAM, 0);
 	// checks to make sure that we created the socket succesfully
-	if (udpSocket == INVALID_SOCKET) {
+	if (connection.socket == INVALID_SOCKET) {
 		std::cout << "Socket creation failed! Error: " << WSAGetLastError() << "\n";
 		WSACleanup();
 		return 1;
 	}
 
-	// ChatGPT: Step 3: Bind the socket
+	connection.addr.sin_family = AF_INET;
+	// htons converts from little endian to big endian, servers use little endian 
+	connection.addr.sin_port = htons(SERVER_PORT);
+	connection.addr.sin_addr.s_addr = _ip;
 
-	serverAddr.sin_family = AF_INET;
-	// htons converts from little endian to big endian
-	// servers use little endian 
-	serverAddr.sin_port = htons(SERVER_PORT);
-	serverAddr.sin_addr.s_addr = INADDR_ANY;
+	return 0;
+}
+
+int TryRecieve(NetInfo& connection, char* buffer, sockaddr* from, int* fromLen)
+{
+	int msgByteSize = recvfrom(connection.socket, buffer, BUFFER_SIZE, 0, from, fromLen);
+
+	// Was there in an error in recvfrom
+	if (msgByteSize == SOCKET_ERROR) {
+		std::cout << "recvfrom failed! Error: " << WSAGetLastError() << "\n";
+		return -1;
+	}
+
+	// Make sure message is terminated
+	buffer[msgByteSize] = '\0';
+
+	return msgByteSize;
+}
+
+int ServerRun()
+{
+	// WSA Data is used to start up the windows sockets.
+	NetInfo serverInfo;
+	sockaddr_in clientAddr;
+	
+	// Buffer to read in messages
+	char buffer[BUFFER_SIZE];
+
+	if (int val = SetupConnection(serverInfo, ADDR_ANY)) { return val; }
 
 	// binds the udp socket to the socket of he server address
 	// makes sure theres no binding error
-	if (bind(udpSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+	if (bind(serverInfo.socket, (sockaddr*)&serverInfo.addr, sizeof(serverInfo.addr)) == SOCKET_ERROR) {
 		std::cout << "Bind failed! Error: " << WSAGetLastError() << "\n";
-		closesocket(udpSocket);
-		WSACleanup();
+		CloseConnection(serverInfo.socket);
 		return 1;
 	}
 
 	// We successfully made a UDP server and its running on the port!
 	std::cout << "UDP Server is running on port " << SERVER_PORT << "...\n";
 
-	// ChatGPT: Step 4: Receive and respond to messages
-
-	// how large the client is
+	// Receive and respond to messages
 	int clientAddrSize = sizeof(clientAddr);
+
 	while (true)
 	{
-		int sizeOfBytesRecv = recvfrom(udpSocket, buffer, BUFFER_SIZE, 0, (sockaddr*)&clientAddr, &clientAddrSize);
-
-		// Any errors in reciving data	
-		if (sizeOfBytesRecv == SOCKET_ERROR)
-		{
-			std::cout << "recvfrom failed! Error: " << WSAGetLastError() << "\n";
-			break;
-		}
-
-		// ChatGPT: Null-terminate received data
-		buffer[sizeOfBytesRecv] = '\0';
+		int sizeOfBytesRecv = TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize);
+		if (sizeOfBytesRecv == SOCKET_ERROR) { break; } // break out of loop, so we can still clean socket
 
 		// Print out to the console what was read in.
 		std::cout << "Received: " << buffer << "\n";
 
-		// ChatGPT: Send response
-
-		// Send a response back saying we recieved the message
+		// Send message to client saying we got the message
 		const char* response = "Message received!";
-		// Sends back it to the client address
-		sendto(udpSocket, response, strlen(response), 0, (sockaddr*)&clientAddr, clientAddrSize);
+		sendto(serverInfo.socket, response, strlen(response), 0, (sockaddr*)&clientAddr, clientAddrSize);
 	}
 
-	// ChatGPT: Step 5: Cleanup
-	closesocket(udpSocket);
-	WSACleanup();
+	// Cleanup
+	CloseConnection(serverInfo.socket);
 	return 0;
 }
 
 int ClientRun()
 {
 	// WSA Data is used to start up the windows sockets.
-	WSADATA wsaData;
-	SOCKET udpSocket;
-	sockaddr_in serverAddr;
+	NetInfo clientInfo;
 
-	// Create a buffer with the given size so we can read in messages.
-	// The buffer size is defined at the top
-	char buffer[BUFFER_SIZE];
+	// Buffers to read messages to
+	char clientBuffer[BUFFER_SIZE] = { 0 };
+	char serverBuffer[BUFFER_SIZE] = { 0 };
 
-	// ChatGPT: Step 1: Initialize Winsock
-
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-		std::cout << "WSAStartup failed!\n";
-		return 1;
-	}
-
-	// ChatGPT: Step 2: Create UDP socket
-
-	udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
-	if (udpSocket == INVALID_SOCKET) {
-		std::cout << "Socket creation failed! Error: " << WSAGetLastError() << "\n";
-		WSACleanup();
-		return 1;
-	}
-
-	// ChatGPT: Step 3: Set up server address
-
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(SERVER_PORT);
-	serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+	int val = SetupConnection(clientInfo, inet_addr(SERVER_IP));
+	if (val) { return val; }
 
 	std::cout << "UDP Client ready. Type messages to send to the server.\n";
 
-	while (true) {
-		std::cout << "Enter message: ";
-		std::cin.getline(buffer, BUFFER_SIZE);
+	while (true) 
+	{
+		UserInputMsg(clientBuffer);
 
-		// ChatGPT: Send message to server
-		int bytesSent = sendto(udpSocket, buffer, strlen(buffer), 0, (sockaddr*)&serverAddr, sizeof(serverAddr));
+		// Send message to server
+		int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
 		if (bytesSent == SOCKET_ERROR) {
 			std::cout << "sendto failed! Error: " << WSAGetLastError() << "\n";
 			break;
 		}
 
-		// ChatGPT: Receive response from server
+		// Receive response from server
 		sockaddr_in fromAddr;
 		int fromLen = sizeof(fromAddr);
 
-		int sizeOfBytesRecv = recvfrom(udpSocket, buffer, BUFFER_SIZE, 0, (sockaddr*)&fromAddr, &fromLen);
-		if (sizeOfBytesRecv == SOCKET_ERROR) {
-			std::cout << "recvfrom failed! Error: " << WSAGetLastError() << "\n";
-			break;
-		}
+		int sizeOfBytesRecv = TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen);
+		if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
-		// ChatGPT: Null-terminate received data
-		buffer[sizeOfBytesRecv] = '\0'; 
-		std::cout << "Server: " << buffer << "\n";
+		std::cout << "Server: " << serverBuffer << "\n";
 
-		// Reason why its down here:
-		// At least have the server know that we exited!
-		if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'i' && buffer[3] == 't')
-		{
+		// Check if user exited via msg
+		char exitCheck[4] = { clientBuffer[0], clientBuffer[1], clientBuffer[2], clientBuffer[3] };
+		if (_stricmp(exitCheck, "exit") == 0) {
 			std::cout << "Exit called. Breaking out of loop.\n";
 			break;
 		}
 	}
 
-	// ChatGPT: Cleanup
-	closesocket(udpSocket);
-	WSACleanup();
+	// Cleanup
+	CloseConnection(clientInfo.socket);
 	return 0;
 }
 
@@ -180,17 +173,7 @@ int main()
 	std::cout << "Server (1) or Client (2): ";
 	int opt = 0;
 
-	do
-	{
-		std::cin >> opt;
-	} while (!(opt == 1 || opt == 2));
+	do { std::cin >> opt; } while (!(opt == 1 || opt == 2));
 
-	if (opt == 1)
-	{
-		ServerRun();
-	}
-	else if (opt == 2)
-	{
-		ClientRun();
-	}
+	opt == 1 ? ServerRun() : ClientRun();
 }
