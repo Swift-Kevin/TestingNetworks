@@ -20,62 +20,91 @@ struct NetInfo {
 	sockaddr_in addr;
 };
 
-void UserInputMsg(char* buffer)
+namespace UTIL
 {
-	std::cout << "Enter message: ";
-	std::cin >> buffer;
-	std::cin.clear();
-	std::cin.ignore(INT_MAX, '\n');
-	buffer[BUFFER_SIZE - 1] = '\0';
-}
-
-void CloseConnection(SOCKET _toClose)
-{
-	closesocket(_toClose);
-	WSACleanup();
-}
-
-int SetupConnection(NetInfo& connection, unsigned long _ip)
-{
-	// we are passing (2,2) in because we want to use Winsock Vers. 2.2 to communicate with
-	if (WSAStartup(MAKEWORD(2, 2), &connection.wsaData) != 0) {
-		std::cout << "WSAStartup failed!\n";
-		return 1;
+	void UserInputMsg(char* _buffer, const char* _prompt)
+	{
+		std::cout << _prompt;
+		std::cin >> _buffer;
+		std::cin.clear();
+		std::cin.ignore(INT_MAX, '\n');
+		_buffer[BUFFER_SIZE - 1] = '\0';
 	}
+}
 
-	// - AF INET = tcp and udp layers 
-	// - data gram = connectionless, unreliable buffers of a fixed maximum length
-	// - 0 = no protocol specified, the service provider will decide!
-	connection.socket = socket(AF_INET, SOCK_DGRAM, 0);
-	// checks to make sure that we created the socket succesfully
-	if (connection.socket == INVALID_SOCKET) {
-		std::cout << "Socket creation failed! Error: " << WSAGetLastError() << "\n";
+namespace NET
+{
+	/// <summary>
+	/// Cleans Up and Close a Connection to a sockets.
+	/// </summary>
+	/// <param name="_toClose">The socket to clean/close.</param>
+	void CloseConnection(SOCKET _toClose)
+	{
+		closesocket(_toClose);
 		WSACleanup();
-		return 1;
 	}
 
-	connection.addr.sin_family = AF_INET;
-	// htons converts from little endian to big endian, servers use little endian 
-	connection.addr.sin_port = htons(SERVER_PORT);
-	connection.addr.sin_addr.s_addr = _ip;
+	/// <summary>
+	/// Starts winsock, creates a socket, and initializes information regarding the connection.
+	/// </summary>
+	/// <param name="connection">The Net Struct to use and set up.</param>
+	/// <param name="_ip">The IP to connect to.</param>
+	/// <returns>0 = Successful Setup, otherwise the error code. </returns>
+	int SetupConnection(NetInfo& connection, unsigned long _ip)
+	{
+		int error = 0;
+		// we are passing (2,2) in because we want to use Winsock Vers. 2.2 to communicate with
+		if (WSAStartup(MAKEWORD(2, 2), &connection.wsaData) != 0)
+		{
+			std::cout << "WSAStartup failed!\n";
+			return 1;
+		}
 
-	return 0;
-}
+		// - AF INET = tcp and udp layers 
+		// - data gram = connectionless, unreliable buffers of a fixed maximum length
+		// - 0 = no protocol specified, the service provider will decide!
+		connection.socket = socket(AF_INET, SOCK_DGRAM, 0);
+		// checks to make sure that we created the socket succesfully
+		if (connection.socket == INVALID_SOCKET)
+		{
+			error = WSAGetLastError();
+			std::cout << "Socket creation failed! Error: " << error << "\n";
+			WSACleanup();
+			return error;
+		}
 
-int TryRecieve(NetInfo& connection, char* buffer, sockaddr* from, int* fromLen)
-{
-	int msgByteSize = recvfrom(connection.socket, buffer, BUFFER_SIZE, 0, from, fromLen);
+		connection.addr.sin_family = AF_INET;
+		// htons converts from little endian to big endian, servers use little endian 
+		connection.addr.sin_port = htons(SERVER_PORT);
+		connection.addr.sin_addr.s_addr = _ip;
 
-	// Was there in an error in recvfrom
-	if (msgByteSize == SOCKET_ERROR) {
-		std::cout << "recvfrom failed! Error: " << WSAGetLastError() << "\n";
-		return -1;
+		return 0;
 	}
 
-	// Make sure message is terminated
-	buffer[msgByteSize] = '\0';
+	/// <summary>
+	/// Tries to recieve a message from a socket.
+	/// </summary>
+	/// <param name="_connection">The Net Struct to use and set up.</param>
+	/// <param name="_buffer">Used to store the recieved message into.</param>
+	/// <param name="_from">The address to receive from.</param>
+	/// <param name="_fromSize">How large the address we are reading in from is.</param>
+	/// <returns>The size in bytes of the message received. -1 = Error in message</returns>
+	int TryRecieve(NetInfo& _connection, char* _buffer, sockaddr* _from, int* _fromSize)
+	{
+		int msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, _from, _fromSize);
 
-	return msgByteSize;
+		// Was there in an error in recvfrom
+		if (msgByteSize == SOCKET_ERROR)
+		{
+			std::cout << "recvfrom failed! Error: " << WSAGetLastError() << "\n";
+			return -1;
+		}
+
+		// Make sure message is terminated
+		_buffer[msgByteSize] = '\0';
+
+		return msgByteSize;
+	}
 }
 
 int ServerRun()
@@ -83,17 +112,21 @@ int ServerRun()
 	// WSA Data is used to start up the windows sockets.
 	NetInfo serverInfo;
 	sockaddr_in clientAddr;
-	
+
 	// Buffer to read in messages
 	char buffer[BUFFER_SIZE];
 
-	if (int val = SetupConnection(serverInfo, ADDR_ANY)) { return val; }
+	if (int val = NET::SetupConnection(serverInfo, ADDR_ANY))
+	{
+		return val;
+	}
 
 	// binds the udp socket to the socket of he server address
 	// makes sure theres no binding error
-	if (bind(serverInfo.socket, (sockaddr*)&serverInfo.addr, sizeof(serverInfo.addr)) == SOCKET_ERROR) {
+	if (bind(serverInfo.socket, (sockaddr*)&serverInfo.addr, sizeof(serverInfo.addr)) == SOCKET_ERROR)
+	{
 		std::cout << "Bind failed! Error: " << WSAGetLastError() << "\n";
-		CloseConnection(serverInfo.socket);
+		NET::CloseConnection(serverInfo.socket);
 		return 1;
 	}
 
@@ -105,8 +138,12 @@ int ServerRun()
 
 	while (true)
 	{
-		int sizeOfBytesRecv = TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize);
-		if (sizeOfBytesRecv == SOCKET_ERROR) { break; } // break out of loop, so we can still clean socket
+		int sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize);
+		if (sizeOfBytesRecv == SOCKET_ERROR) 
+		{ 
+			// break out of loop, so we can still clean socket
+			break; 
+		} 
 
 		// Print out to the console what was read in.
 		std::cout << "Received: " << buffer << "\n";
@@ -117,7 +154,7 @@ int ServerRun()
 	}
 
 	// Cleanup
-	CloseConnection(serverInfo.socket);
+	NET::CloseConnection(serverInfo.socket);
 	return 0;
 }
 
@@ -130,19 +167,24 @@ int ClientRun()
 	char clientBuffer[BUFFER_SIZE] = { 0 };
 	char serverBuffer[BUFFER_SIZE] = { 0 };
 
-	int val = SetupConnection(clientInfo, inet_addr(SERVER_IP));
-	if (val) { return val; }
+	int errorCode = NET::SetupConnection(clientInfo, inet_addr(SERVER_IP));
+	if (errorCode)
+	{
+		return errorCode;
+	}
 
 	std::cout << "UDP Client ready. Type messages to send to the server.\n";
 
-	while (true) 
+	while (true)
 	{
-		UserInputMsg(clientBuffer);
+		UTIL::UserInputMsg(clientBuffer, "Enter message: ");
 
 		// Send message to server
 		int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
-		if (bytesSent == SOCKET_ERROR) {
-			std::cout << "sendto failed! Error: " << WSAGetLastError() << "\n";
+		// If error sending bytes
+		if (bytesSent == SOCKET_ERROR)
+		{
+			std::cout << "[ERROR] sendto failed! Code: " << WSAGetLastError() << "\n";
 			break;
 		}
 
@@ -150,21 +192,25 @@ int ClientRun()
 		sockaddr_in fromAddr;
 		int fromLen = sizeof(fromAddr);
 
-		int sizeOfBytesRecv = TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen);
-		if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+		int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen);
+		if (sizeOfBytesRecv == SOCKET_ERROR)
+		{
+			break;
+		}
 
 		std::cout << "Server: " << serverBuffer << "\n";
 
 		// Check if user exited via msg
 		char exitCheck[4] = { clientBuffer[0], clientBuffer[1], clientBuffer[2], clientBuffer[3] };
-		if (_stricmp(exitCheck, "exit") == 0) {
+		if (_stricmp(exitCheck, "exit") == 0) 
+		{
 			std::cout << "Exit called. Breaking out of loop.\n";
 			break;
 		}
 	}
 
 	// Cleanup
-	CloseConnection(clientInfo.socket);
+	NET::CloseConnection(clientInfo.socket);
 	return 0;
 }
 
@@ -173,7 +219,10 @@ int main()
 	std::cout << "Server (1) or Client (2): ";
 	int opt = 0;
 
-	do { std::cin >> opt; } while (!(opt == 1 || opt == 2));
+	do 
+	{ 
+		std::cin >> opt; 
+	} while (!(opt == 1 || opt == 2));
 
 	opt == 1 ? ServerRun() : ClientRun();
 }
