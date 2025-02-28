@@ -179,16 +179,13 @@ namespace NET
 		char serverBuffer[BUFFER_SIZE] = { 0 };
 
 		int errorCode = NET::SetupConnection(clientInfo, inet_addr(SERVER_IP), debugger);
-		if (errorCode)
-		{
-			return errorCode;
-		}
+		if (errorCode) { return errorCode; }
 
 		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
 
 		while (true)
 		{
-			UTIL::UserInputMsg(clientBuffer, "Enter message: ");
+			UTIL::UserInputMsg(clientBuffer, "[You] : ");
 
 			// Send message to server
 			int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
