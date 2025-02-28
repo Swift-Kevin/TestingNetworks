@@ -1,14 +1,15 @@
 #pragma once
 #include "Utils.h"
 
-enum class LogType
+enum class LogType : byte
 {
-	Log,
-	Server,
-	System,
-	Debug,
-	Warning,
-	Error
+	Log = 0b1,
+	Server = 0b10,
+	System = 0b11,
+	Debug = 0b100,
+	Warning = 0b101,
+	Client = 0b110,
+	Error = 0b111
 };
 
 class Debug
@@ -27,7 +28,7 @@ private:
 	/// </summary>
 	/// <param name="_type">The type to convert.</param>
 	/// <returns>The Prefix to write out to the file.</returns>
-	const char* ConvertLogType(LogType _type)
+	static const char* ConvertLogType(LogType _type)
 	{
 		switch (_type)
 		{
@@ -43,6 +44,8 @@ private:
 			return "[Warning] : ";
 		case LogType::Error:
 			return "[Error] : ";
+		case LogType::Client:
+			return "[Client] : ";
 		default:
 			break;
 		}
@@ -63,7 +66,7 @@ public:
 		if (logFile.is_open())
 		{
 			// write to console then log it
-			logFile << ConvertLogType(_type) << _toLog;
+			logFile << ConvertLogType(_type) << _toLog << '\n';
 		}
 		logFile.close();
 	}
@@ -85,17 +88,23 @@ public:
 			fileName += buffer;
 			fileName += "_Log.txt";
 
-			logFile.open(fileName);
+			// Check to make sure the folder is there.
+			if (!std::filesystem::is_directory("./Logs/"))
+			{
+				std::filesystem::create_directory("./Logs/");
+			}
+
+			logFile.open(fileName, std::ios_base::app);
 			if (logFile.is_open())
 			{
-				logFile << ConvertLogType(LogType::System) << "Started Logging.\n\0";
-				Print("Started Logging.\n\0", LogType::Server);
+				logFile << ConvertLogType(LogType::System) << UTIL::Message_LogStart;
+				Print(UTIL::Message_LogStart, LogType::System);
 			}
 			logFile.close();
 		}
 		else
 		{
-			Print("StartLog() was called, but was already started.\n\0", LogType::Error);
+			Print("StartLog() was called, but was already started.", LogType::Error);
 		}
 	}
 
@@ -107,8 +116,8 @@ public:
 		logFile.open(fileName);
 		if (logFile.is_open())
 		{
-			Print("End of Console Logging...\n\0", LogType::System);
-			logFile << ConvertLogType(LogType::System) << "Closing Console...\n\0";
+			Print(UTIL::Message_LogEnd, LogType::System);
+			logFile << ConvertLogType(LogType::System) << UTIL::Message_LogEnd;
 		}
 		logFile.close();
 
@@ -117,13 +126,13 @@ public:
 	}
 
 	/// <summary>
-	/// Prints out a message to the console.
+	/// Prints out a message to the console. Takes care of null termination.
 	/// </summary>
 	/// <param name="_message">The message to print.</param>
 	/// <param name="_type">The type to prefix the print with.</param>
-	void Print(const char* _message, LogType _type)
+	static void Print(const char* _message, LogType _type)
 	{
-		std::cout << ConvertLogType(_type) << _message;
+		std::cout << ConvertLogType(_type) << _message << "\n\0";
 	}
 
 };
