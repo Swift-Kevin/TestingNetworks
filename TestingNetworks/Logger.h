@@ -12,6 +12,8 @@ enum class LogType : byte
 	Error = 0b111
 };
 
+
+
 class Debug
 {
 private:
@@ -97,8 +99,8 @@ public:
 			logFile.open(fileName, std::ios_base::app);
 			if (logFile.is_open())
 			{
-				logFile << ConvertLogType(LogType::System) << UTIL::Message_LogStart;
-				Print(UTIL::Message_LogStart, LogType::System);
+				logFile << ConvertLogType(LogType::System) << UTIL::MSG_LogStart << '\n';
+				Print(UTIL::MSG_LogStart, LogType::System);
 			}
 			logFile.close();
 		}
@@ -116,13 +118,15 @@ public:
 		logFile.open(fileName);
 		if (logFile.is_open())
 		{
-			Print(UTIL::Message_LogEnd, LogType::System);
-			logFile << ConvertLogType(LogType::System) << UTIL::Message_LogEnd;
+			Print(UTIL::MSG_LogEnd, LogType::System);
+			logFile << ConvertLogType(LogType::System) << UTIL::MSG_LogEnd;
 		}
 		logFile.close();
 
 		// Allow for more logs to be made after server started. Only if we closed out the log.
 		fileAlreadyMade = !fileAlreadyMade;
+		// Clean File Name
+		fileName = "";
 	}
 
 	/// <summary>

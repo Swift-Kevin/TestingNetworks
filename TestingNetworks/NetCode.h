@@ -40,7 +40,7 @@ namespace NET
 		if (connection.socket == INVALID_SOCKET)
 		{
 			error = WSAGetLastError();
-			
+
 			// Log Errors
 			std::string msg = "Socket creation failed! Error Code: " + std::to_string(error);
 			Debug::Print(msg.c_str(), LogType::Error);
@@ -98,6 +98,8 @@ namespace NET
 		// WSA Data is used to start up the windows sockets.
 		NetInfo serverInfo;
 		sockaddr_in clientAddr;
+		// Multiple Clients
+		std::vector<sockaddr_in> connectedClients;
 
 		// Start custom debugger (log files / messages)
 		Debug debugger;
@@ -116,7 +118,7 @@ namespace NET
 			std::string msg = "Bind failed! Error Code: " + std::to_string(WSAGetLastError());
 			Debug::Print(msg.c_str() + SERVER_PORT, LogType::System);
 			debugger.Log(msg.c_str() + SERVER_PORT, LogType::System);
-			
+
 			// Clean Up Connections
 			NET::CloseConnection(serverInfo.socket);
 			debugger.CloseLog();
@@ -136,28 +138,55 @@ namespace NET
 		while (true)
 		{
 			int sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
-			if (sizeOfBytesRecv == SOCKET_ERROR)
-			{
-				// break out of loop, so we can still clean socket
-				break;
-			}
+
+			// break out of loop, so we can still clean socket
+			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+
+			// Make debug message
+			std::string receivedMsg = "User: [" + std::string(inet_ntoa(clientAddr.sin_addr)) + "]: " + buffer;
 
 			// Print out to the console what was read in.
-			Debug::Print(buffer, LogType::Client);
-			debugger.Log(buffer, LogType::Client);
+			Debug::Print(receivedMsg.c_str(), LogType::Client);
+			debugger.Log(receivedMsg.c_str(), LogType::Client);
 
 			// Send message to client saying we got the message
-			const char* response = "Message received!";
-			
-			Debug::Print(response, LogType::Server);
-			debugger.Log(response, LogType::Server);
-			sendto(serverInfo.socket, response, (int)strlen(response), 0, (sockaddr*)&clientAddr, clientAddrSize);
+			Debug::Print(UTIL::MSG_Client_Recv, LogType::Server);
+			debugger.Log(UTIL::MSG_Client_Recv, LogType::Server);
+
+			bool isKnownClient = false;
+			for (const sockaddr_in& client : connectedClients)
+			{
+				// Is client already connected
+				if (client.sin_addr.s_addr == clientAddr.sin_addr.s_addr && client.sin_port == clientAddr.sin_port)
+				{
+					isKnownClient = true;
+					break;
+				}
+			}
+
+			// otherwise add them to the connected sockets
+			if (!isKnownClient)
+			{
+				connectedClients.push_back(clientAddr);
+			}
+
+			// send to all connected clients, except client who sent it
+			for (const sockaddr_in& client : connectedClients)
+			{
+				// not client who originally sent the message
+				if (!(client.sin_addr.s_addr == clientAddr.sin_addr.s_addr && client.sin_port == clientAddr.sin_port))
+				{
+					sendto(serverInfo.socket, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0, (sockaddr*)&client, sizeof(client));
+				}
+			}
+
+			// Write back to sender
+			sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
 		}
 
 		// Cleanup
 		NET::CloseConnection(serverInfo.socket);
 		debugger.CloseLog();
-
 		return 0;
 	}
 
@@ -183,6 +212,26 @@ namespace NET
 
 		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
 
+		bool doReceiveMsg = true;
+
+		std::thread receiveThread([&]()
+			{
+				while (doReceiveMsg)
+				{
+					// Receive response from server
+					sockaddr_in fromAddr;
+					int fromLen = sizeof(fromAddr);
+
+					int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
+					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+
+					Debug::Print(serverBuffer, LogType::Server);
+					debugger.Log(serverBuffer, LogType::Server);
+				}
+
+			});
+
+
 		while (true)
 		{
 			UTIL::UserInputMsg(clientBuffer, "[You] : ");
@@ -198,27 +247,21 @@ namespace NET
 				break;
 			}
 
-			// Receive response from server
-			sockaddr_in fromAddr;
-			int fromLen = sizeof(fromAddr);
-
-			int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
-			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
-			
-			Debug::Print(serverBuffer, LogType::Server);
-
 			// Check if user exited via msg
-			// inheritenly "exit" has a null terminator at the end apparently??
-			char exitCheck[5] = { clientBuffer[0], clientBuffer[1], clientBuffer[2], clientBuffer[3], '\0'};
-			if (_stricmp(exitCheck, "exit") == 0)
+			if (_strnicmp(clientBuffer, "exit", 4) == 0)
 			{
 				Debug::Print("Exit called. Breaking out of loop.", LogType::System);
+				debugger.Log("Exit called. Breaking out of loop.", LogType::System);
+
+				doReceiveMsg = false;
 				break;
 			}
 		}
 
 		// Cleanup
+		receiveThread.detach();
 		NET::CloseConnection(clientInfo.socket);
+		debugger.CloseLog();
 		return 0;
 	}
 }

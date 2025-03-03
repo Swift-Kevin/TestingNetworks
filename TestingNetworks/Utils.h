@@ -3,8 +3,9 @@
 
 namespace UTIL
 {
-	static const char* Message_LogStart = "Server Started.";
-	static const char* Message_LogEnd = "End of Console Logging.";
+	static const char* MSG_LogStart = "Server Started.";
+	static const char* MSG_LogEnd = "End of Console Logging.";
+	static const char* MSG_Client_Recv = "Message received!";
 
 	void UserInputMsg(char* _buffer, const char* _prompt)
 	{
