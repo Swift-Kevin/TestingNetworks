@@ -71,7 +71,7 @@ namespace NET
 	/// <returns>The size in bytes of the message received. -1 = Error in message</returns>
 	int TryRecieve(NetInfo& _connection, char* _buffer, sockaddr* _from, int* _fromSize, Debug& _debugger)
 	{
-		int msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, _from, _fromSize);
+		int msgByteSize = msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, _from, _fromSize);
 
 		// Was there in an error in recvfrom
 		if (msgByteSize == SOCKET_ERROR)
