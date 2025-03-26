@@ -50,6 +50,16 @@ namespace NET
 			return error;
 		}
 
+		u_long ioMode = 1;
+		error = ioctlsocket(connection.socket, FIONBIO, &ioMode);
+		if (error != NO_ERROR)
+		{
+			// Log Errors
+			std::string msg = "ioctlsocket failed with error: " + std::to_string(error);
+			Debug::Print(msg.c_str(), LogType::Error);
+			_debugger.Log(msg.c_str(), LogType::Error);
+		}
+
 		connection.addr.sin_family = AF_INET;
 		// htons converts from little endian to big endian, servers use little endian 
 		connection.addr.sin_port = htons(SERVER_PORT);
@@ -76,11 +86,16 @@ namespace NET
 		// Was there in an error in recvfrom
 		if (msgByteSize == SOCKET_ERROR)
 		{
-			// Log Errors
-			std::string msg = "recvfrom failed! Error Code: " + std::to_string(WSAGetLastError());
-			Debug::Print(msg.c_str(), LogType::Error);
-			_debugger.Log(msg.c_str(), LogType::Error);
-			return -1;
+			int lastErr = WSAGetLastError();
+
+			if (lastErr != EWOULDBLOCK)
+			{
+				// Log Errors
+				std::string msg = "recvfrom failed! Error Code: " + std::to_string(lastErr);
+				Debug::Print(msg.c_str(), LogType::Error);
+				_debugger.Log(msg.c_str(), LogType::Error);
+				return -1;
+			}
 		}
 
 		// Make sure message is terminated
