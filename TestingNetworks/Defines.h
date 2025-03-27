@@ -12,6 +12,7 @@
 #include <chrono>
 #include <filesystem>
 #include <thread>
+#include <mutex>
 
 // Constant Loopback IP for testing
 // Change if running on a different machine

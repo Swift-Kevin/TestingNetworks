@@ -51,13 +51,15 @@ namespace NET
 		}
 
 		u_long ioMode = 1;
-		error = ioctlsocket(connection.socket, FIONBIO, &ioMode);
-		if (error != NO_ERROR)
+		if (ioctlsocket(connection.socket, FIONBIO, &ioMode) == SOCKET_ERROR)
 		{
 			// Log Errors
-			std::string msg = "ioctlsocket failed with error: " + std::to_string(error);
+			std::string msg = "ioctlsocket failed with error: " + std::to_string(WSAGetLastError());
 			Debug::Print(msg.c_str(), LogType::Error);
 			_debugger.Log(msg.c_str(), LogType::Error);
+
+			WSACleanup();
+			return error;
 		}
 
 		connection.addr.sin_family = AF_INET;
@@ -81,14 +83,22 @@ namespace NET
 	/// <returns>The size in bytes of the message received. -1 = Error in message</returns>
 	int TryRecieve(NetInfo& _connection, char* _buffer, sockaddr* _from, int* _fromSize, Debug& _debugger)
 	{
-		int msgByteSize = msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, _from, _fromSize);
+		int msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, NULL, NULL);
 
 		// Was there in an error in recvfrom
-		if (msgByteSize == SOCKET_ERROR)
+		if (msgByteSize <= 0)
 		{
 			int lastErr = WSAGetLastError();
 
-			if (lastErr != EWOULDBLOCK)
+			if (lastErr == WSAEWOULDBLOCK)
+			{
+				return WSAEWOULDBLOCK;
+			}
+			else if (lastErr == WSAEINVAL)
+			{
+				return lastErr;
+			}
+			else
 			{
 				// Log Errors
 				std::string msg = "recvfrom failed! Error Code: " + std::to_string(lastErr);
@@ -99,7 +109,15 @@ namespace NET
 		}
 
 		// Make sure message is terminated
-		_buffer[msgByteSize] = '\0';
+		if (msgByteSize > 0 && msgByteSize < BUFFER_SIZE)
+		{
+			_buffer[msgByteSize] = '\0';
+		}
+
+		if (msgByteSize == -1)
+		{
+			msgByteSize = 0;
+		}
 
 		return msgByteSize;
 	}
@@ -126,7 +144,7 @@ namespace NET
 		int errorCode = NET::SetupConnection(serverInfo, ADDR_ANY, debugger);
 		if (errorCode) { return errorCode; }
 
-		// binds the udp socket to the socket of he server address
+		// binds the udp socket to the socket of the server address
 		// makes sure theres no binding error
 		if (bind(serverInfo.socket, (sockaddr*)&serverInfo.addr, sizeof(serverInfo.addr)) == SOCKET_ERROR)
 		{
@@ -153,6 +171,8 @@ namespace NET
 		while (true)
 		{
 			int sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
+
+			if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
 
 			// break out of loop, so we can still clean socket
 			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
@@ -227,54 +247,68 @@ namespace NET
 
 		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
 
-		bool doReceiveMsg = true;
+		bool runThreadLoop = true;
+		std::mutex mtx;
+		std::condition_variable cv;
 
-		std::thread receiveThread([&]()
+		std::thread sendingThread([&]() {
+			while (runThreadLoop)
 			{
-				while (doReceiveMsg)
+				UTIL::UserInputMsg(clientBuffer, "[You] : ");
+
+				// Send message to server
+				int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
+				// If error sending bytes
+				if (bytesSent == SOCKET_ERROR)
 				{
-					// Receive response from server
-					sockaddr_in fromAddr;
-					int fromLen = sizeof(fromAddr);
-
-					int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
-					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
-
-					Debug::Print(serverBuffer, LogType::Server);
-					debugger.Log(serverBuffer, LogType::Server);
+					// Cant put "msg" into the method call due to unscoped type
+					std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
+					Debug::Print(msg.c_str(), LogType::Error);
+					break;
 				}
 
-			});
-
-
-		while (true)
-		{
-			UTIL::UserInputMsg(clientBuffer, "[You] : ");
-
-			// Send message to server
-			int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
-			// If error sending bytes
-			if (bytesSent == SOCKET_ERROR)
-			{
-				// Cant put "msg" into the method call due to unscoped type
-				std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
-				Debug::Print(msg.c_str(), LogType::Error);
-				break;
+				// Check if user exited via msg
+				if (_strnicmp(clientBuffer, "exit", 4) == 0)
+				{
+					Debug::Print("Exit called. Breaking out of loop.", LogType::System);
+					debugger.Log("Exit called. Breaking out of loop.", LogType::System);
+					runThreadLoop = false;
+					break;
+				}
 			}
 
-			// Check if user exited via msg
-			if (_strnicmp(clientBuffer, "exit", 4) == 0)
-			{
-				Debug::Print("Exit called. Breaking out of loop.", LogType::System);
-				debugger.Log("Exit called. Breaking out of loop.", LogType::System);
-
-				doReceiveMsg = false;
-				break;
+			cv.notify_one();
 			}
-		}
+		);
 
-		// Cleanup
-		receiveThread.detach();
+		std::thread recvThread([&]() {
+
+			std::unique_lock<std::mutex> lock(mtx);
+			cv.wait(lock, [&]() { return !runThreadLoop; });
+
+			while (runThreadLoop)
+			{
+				// Receive response from server
+				sockaddr_in fromAddr;
+				int fromLen = sizeof(fromAddr);
+
+				int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
+				if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
+
+				if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+
+				Debug::Print(serverBuffer, LogType::Server);
+				debugger.Log(serverBuffer, LogType::Server);
+			}
+			}
+		);
+
+		sendingThread.join();
+		recvThread.join();
+
+
+
+
 		NET::CloseConnection(clientInfo.socket);
 		debugger.CloseLog();
 		return 0;
