@@ -17,14 +17,14 @@ enum class LogType : byte
 class Debug
 {
 private:
-	
+
 	// Member Fields
 	std::ofstream logFile;
 	bool fileAlreadyMade = false;
 	std::string fileName = "";
-	
+
 	// Methods
-	
+
 	/// <summary>
 	/// Creates a prefix for the log type
 	/// </summary>
@@ -52,6 +52,68 @@ private:
 			break;
 		}
 		return "INVALID";
+	}
+
+	/// <summary>
+	/// Prints the Log type with the proper coloring
+	/// </summary>
+	/// <param name="_type"></param>
+	static void PrintColoredLogType(LogType _type)
+	{
+		std::string print = "";
+		UTIL::ConsoleColor color = UTIL::ConsoleColor::Default;
+
+		switch (_type)
+		{
+		case LogType::Log:
+		{
+			print = "[Log] : ";
+			color = UTIL::ConsoleColor::Red;
+			break;
+		}
+		case LogType::System:
+		{
+			print = "[System] : ";
+			color = UTIL::ConsoleColor::Green;
+			break;
+		}
+		case LogType::Server:
+		{
+			print = "[Server] : ";
+			color = UTIL::ConsoleColor::Green;
+			break;
+		}
+		case LogType::Debug:
+		{
+			print = "[Debug] : ";
+			color = UTIL::ConsoleColor::Blue;
+			break;
+		}
+		case LogType::Warning:
+		{
+			print = "[Warning] : ";
+			color = UTIL::ConsoleColor::Yellow;
+			break;
+		}
+		case LogType::Error:
+		{
+			print = "[Error] : ";
+			color = UTIL::ConsoleColor::Red;
+			break;
+		}
+		case LogType::Client:
+		{
+			print = "[Client] : ";
+			color = UTIL::ConsoleColor::White;
+			break;
+		}
+		default:
+			break;
+		}
+
+		UTIL::SetForegroundColor(color);
+		std::cout << print;
+		UTIL::SetForegroundColor(UTIL::ConsoleColor::White);
 	}
 
 
@@ -136,7 +198,11 @@ public:
 	/// <param name="_type">The type to prefix the print with.</param>
 	static void Print(const char* _message, LogType _type)
 	{
-		std::cout << ConvertLogType(_type) << _message << "\n\0";
+
+		std::cout << ConvertLogType(_type);
+		// print out rest of message in white
+		UTIL::SetForegroundColor(UTIL::ConsoleColor::Default);
+		std::cout << _message << "\n\0";
 	}
 
 };
