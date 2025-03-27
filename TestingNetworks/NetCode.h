@@ -67,6 +67,10 @@ namespace NET
 		connection.addr.sin_port = htons(SERVER_PORT);
 		connection.addr.sin_addr.s_addr = _ip;
 
+		/*
+			Server Binds later in its own function
+		*/
+
 		Debug::Print("Started socket.", LogType::System);
 		_debugger.Log("Started socket.", LogType::System);
 
@@ -251,63 +255,69 @@ namespace NET
 		std::mutex mtx;
 		std::condition_variable cv;
 
-		std::thread sendingThread([&]() {
-			while (runThreadLoop)
+		std::thread sendThread([&]()
 			{
-				UTIL::UserInputMsg(clientBuffer, "[You] : ");
-
-				// Send message to server
-				int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
-				// If error sending bytes
-				if (bytesSent == SOCKET_ERROR)
+				while (runThreadLoop)
 				{
-					// Cant put "msg" into the method call due to unscoped type
-					std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
-					Debug::Print(msg.c_str(), LogType::Error);
-					break;
+					UTIL::UserInputMsg(clientBuffer, "[You] : ");
+
+					// Send message to server
+					int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
+					// If error sending bytes
+					if (bytesSent == SOCKET_ERROR)
+					{
+						// Cant put "msg" into the method call due to unscoped type
+						std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
+						Debug::Print(msg.c_str(), LogType::Error);
+						debugger.Log(msg.c_str(), LogType::Error);
+
+						break;
+					}
+
+					// Check if user exited via msg
+					if (_strnicmp(clientBuffer, "exit", 4) == 0)
+					{
+						std::string msg = "Exit called. Breaking out of loop.";
+						Debug::Print(msg.c_str(), LogType::System);
+						debugger.Log(msg.c_str(), LogType::System);
+
+						runThreadLoop = false;
+						break;
+					}
 				}
 
-				// Check if user exited via msg
-				if (_strnicmp(clientBuffer, "exit", 4) == 0)
-				{
-					Debug::Print("Exit called. Breaking out of loop.", LogType::System);
-					debugger.Log("Exit called. Breaking out of loop.", LogType::System);
-					runThreadLoop = false;
-					break;
-				}
-			}
-
-			cv.notify_one();
+				// Notify the condition variable to update
+				cv.notify_one();
 			}
 		);
 
-		std::thread recvThread([&]() {
-
-			std::unique_lock<std::mutex> lock(mtx);
-			cv.wait(lock, [&]() { return !runThreadLoop; });
-
-			while (runThreadLoop)
+		std::thread recvThread([&]()
 			{
-				// Receive response from server
-				sockaddr_in fromAddr;
-				int fromLen = sizeof(fromAddr);
+				std::unique_lock<std::mutex> lock(mtx);
+				cv.wait(lock, [&]() { return !runThreadLoop; });
 
-				int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
-				if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
+				while (runThreadLoop)
+				{
+					// Receive response from server
+					sockaddr_in fromAddr;
+					int fromLen = sizeof(fromAddr);
 
-				if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+					int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
+					// if it would have blocked, skip over it.
+					if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
+					// If it was an error, get out of the loop
+					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
-				Debug::Print(serverBuffer, LogType::Server);
-				debugger.Log(serverBuffer, LogType::Server);
-			}
+					Debug::Print(serverBuffer, LogType::Server);
+					debugger.Log(serverBuffer, LogType::Server);
+				}
 			}
 		);
 
-		sendingThread.join();
+		// Blocks main thread from running.
+		// Good b/c I want a thread for I&O
+		sendThread.join();
 		recvThread.join();
-
-
-
 
 		NET::CloseConnection(clientInfo.socket);
 		debugger.CloseLog();
