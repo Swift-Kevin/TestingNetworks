@@ -20,7 +20,13 @@ namespace UTIL
 		Default = 9
 	};
 
-	void UserInputMsg(char* _buffer, const char* _prompt)
+	/// <summary>
+	/// Asks the user for input
+	/// </summary>
+	/// <param name="_buffer">The buffer to fill with input</param>
+	/// <param name="_prompt">A prompt displayed to the user</param>
+	/// <returns>Status of the buffer if its empty or not.</returns>
+	bool UserInputMsg(char* _buffer, const char* _prompt)
 	{
 		std::cout << _prompt;
 		
@@ -34,6 +40,8 @@ namespace UTIL
 		std::cin.clear();
 		//std::cin.ignore(INT_MAX, '\n');
 		_buffer[BUFFER_SIZE - 1] = '\0';
+	
+		return buf.empty();
 	}
 
 	/// <summary>

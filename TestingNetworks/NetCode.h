@@ -189,22 +189,25 @@ namespace NET
 			debugger.Log(receivedMsg.c_str(), LogType::Client);
 
 			// Send message to client saying we got the message
-			Debug::Print(UTIL::MSG_Client_Recv, LogType::Server);
-			debugger.Log(UTIL::MSG_Client_Recv, LogType::Server);
+			// Debug::Print(UTIL::MSG_Client_Recv, LogType::Server);
+			// debugger.Log(UTIL::MSG_Client_Recv, LogType::Server);
+						
+			// Write back to sender
+			sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
 
-			bool isKnownClient = true;
+			bool unknownClient = true;
 			for (const sockaddr_in& client : connectedClients)
 			{
 				if ((client.sin_addr.s_addr != clientAddr.sin_addr.s_addr) && (client.sin_port != clientAddr.sin_port))
 				{
-					isKnownClient = false;
+					Debug::Print("Connected New User", LogType::Server);
+					unknownClient = false;
 					break;
 				}
 			}
 
-			if (isKnownClient)
+			if (unknownClient)
 			{
-				Debug::Print("Connected New User", LogType::Server);
 				connectedClients.push_back(clientAddr);
 			}
 
@@ -216,10 +219,10 @@ namespace NET
 				{
 					sendto(serverInfo.socket, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0, (sockaddr*)&client, sizeof(client));
 				}
-			}
 
-			// Write back to sender
-			sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
+				//send(client.sin_addr.S_un.S_addr, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0);
+
+			}
 		}
 
 		// Cleanup
@@ -258,7 +261,8 @@ namespace NET
 			{
 				while (runThreadLoop)
 				{
-					UTIL::UserInputMsg(clientBuffer, "[You] : ");
+					// if buffer is empty
+					if (UTIL::UserInputMsg(clientBuffer, "[You] : ")) { continue; }
 
 					// Send message to server
 					int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
@@ -292,8 +296,8 @@ namespace NET
 
 		std::thread recvThread([&]()
 			{
-				std::unique_lock<std::mutex> lock(mtx);
-				cv.wait(lock, [&]() { return !runThreadLoop; });
+				//std::unique_lock<std::mutex> lock(mtx);
+				//cv.wait(lock, [&]() { return !runThreadLoop; });
 
 				while (runThreadLoop)
 				{
@@ -303,7 +307,7 @@ namespace NET
 
 					int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
 					// if it would have blocked, skip over it.
-					if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
+					if (sizeOfBytesRecv == WSAEWOULDBLOCK || sizeOfBytesRecv == WSAEINVAL) { continue; }
 					// If it was an error, get out of the loop
 					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
