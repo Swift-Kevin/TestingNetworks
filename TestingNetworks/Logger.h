@@ -198,8 +198,8 @@ public:
 	/// <param name="_type">The type to prefix the print with.</param>
 	static void Print(const char* _message, LogType _type)
 	{
-
-		std::cout << ConvertLogType(_type);
+		// Prints the log type in the color format
+		PrintColoredLogType(_type);
 		// print out rest of message in white
 		UTIL::SetForegroundColor(UTIL::ConsoleColor::Default);
 		std::cout << _message << "\n\0";

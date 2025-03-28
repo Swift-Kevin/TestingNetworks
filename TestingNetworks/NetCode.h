@@ -176,8 +176,6 @@ namespace NET
 		{
 			int sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
 
-			Debug::Print("CONNECTING PERSON WOOO", LogType::Error);
-
 			if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
 
 			// break out of loop, so we can still clean socket
@@ -194,20 +192,19 @@ namespace NET
 			Debug::Print(UTIL::MSG_Client_Recv, LogType::Server);
 			debugger.Log(UTIL::MSG_Client_Recv, LogType::Server);
 
-			bool isKnownClient = false;
+			bool isKnownClient = true;
 			for (const sockaddr_in& client : connectedClients)
 			{
-				// Is client already connected
-				if (client.sin_addr.s_addr != clientAddr.sin_addr.s_addr && client.sin_port != clientAddr.sin_port)
+				if ((client.sin_addr.s_addr != clientAddr.sin_addr.s_addr) && (client.sin_port != clientAddr.sin_port))
 				{
-					isKnownClient = true;
+					isKnownClient = false;
 					break;
 				}
 			}
 
-			// otherwise add them to the connected sockets
-			if (!isKnownClient)
+			if (isKnownClient)
 			{
+				Debug::Print("Connected New User", LogType::Server);
 				connectedClients.push_back(clientAddr);
 			}
 
