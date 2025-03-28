@@ -102,7 +102,7 @@ namespace NET
 			{
 				return lastErr;
 			}
-			else
+			else 
 			{
 				// Log Errors
 				std::string msg = "recvfrom failed! Error Code: " + std::to_string(lastErr);
@@ -228,7 +228,6 @@ namespace NET
 				// not client who originally sent the message
 				if (!(client.sin_addr.s_addr == clientAddr.sin_addr.s_addr && client.sin_port == clientAddr.sin_port))
 				{
-					//send(client.sin_addr.S_un.S_addr, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0);
 					sendto(serverInfo.socket, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0, (sockaddr*)&client, sizeof(client));
 				}
 			
@@ -264,9 +263,7 @@ namespace NET
 		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
 
 		bool runThreadLoop = true;
-		std::mutex mtx;
-		std::condition_variable cv;
-
+		
 		std::thread sendThread([&]()
 			{
 				while (runThreadLoop)
@@ -298,17 +295,11 @@ namespace NET
 						break;
 					}
 				}
-
-				// Notify the condition variable to update
-				cv.notify_one();
 			}
 		);
 
 		std::thread recvThread([&]()
 			{
-				//std::unique_lock<std::mutex> lock(mtx);
-				//cv.wait(lock, [&]() { return !runThreadLoop; });
-
 				while (runThreadLoop)
 				{
 					// Receive response from server
@@ -321,8 +312,12 @@ namespace NET
 					// If it was an error, get out of the loop
 					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
+					std::cout << "\x1b[2K" << '\r';
+
 					Debug::Print(serverBuffer, LogType::Server);
 					debugger.Log(serverBuffer, LogType::Server);
+
+					std::cout << "[You] : ";
 				}
 			}
 		);
