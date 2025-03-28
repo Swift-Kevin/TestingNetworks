@@ -87,7 +87,7 @@ namespace NET
 	/// <returns>The size in bytes of the message received. -1 = Error in message</returns>
 	int TryRecieve(NetInfo& _connection, char* _buffer, sockaddr* _from, int* _fromSize, Debug& _debugger)
 	{
-		int msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, NULL, NULL);
+		int msgByteSize = recvfrom(_connection.socket, _buffer, BUFFER_SIZE, 0, _from, _fromSize);
 
 		// Was there in an error in recvfrom
 		if (msgByteSize <= 0)
@@ -135,6 +135,11 @@ namespace NET
 		// WSA Data is used to start up the windows sockets.
 		NetInfo serverInfo;
 		sockaddr_in clientAddr;
+
+		clientAddr.sin_family = AF_INET;
+		clientAddr.sin_port = htons(SERVER_PORT);
+		clientAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+
 		// Multiple Clients
 		std::vector<sockaddr_in> connectedClients;
 
@@ -193,14 +198,19 @@ namespace NET
 			// debugger.Log(UTIL::MSG_Client_Recv, LogType::Server);
 						
 			// Write back to sender
-			sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
+			int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
+			if (errorCode == SOCKET_ERROR)
+			{
+				std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
+				Debug::Print(msg.c_str(), LogType::Error);
+				debugger.Log(msg.c_str(), LogType::Error);
+			}
 
 			bool unknownClient = true;
 			for (const sockaddr_in& client : connectedClients)
 			{
-				if ((client.sin_addr.s_addr != clientAddr.sin_addr.s_addr) && (client.sin_port != clientAddr.sin_port))
+				if ((client.sin_addr.s_addr == clientAddr.sin_addr.s_addr) && (client.sin_port == clientAddr.sin_port))
 				{
-					Debug::Print("Connected New User", LogType::Server);
 					unknownClient = false;
 					break;
 				}
@@ -208,6 +218,7 @@ namespace NET
 
 			if (unknownClient)
 			{
+				Debug::Print("Connected New User", LogType::Server);
 				connectedClients.push_back(clientAddr);
 			}
 
@@ -217,11 +228,10 @@ namespace NET
 				// not client who originally sent the message
 				if (!(client.sin_addr.s_addr == clientAddr.sin_addr.s_addr && client.sin_port == clientAddr.sin_port))
 				{
+					//send(client.sin_addr.S_un.S_addr, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0);
 					sendto(serverInfo.socket, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0, (sockaddr*)&client, sizeof(client));
 				}
-
-				//send(client.sin_addr.S_un.S_addr, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0);
-
+			
 			}
 		}
 
