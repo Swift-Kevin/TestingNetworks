@@ -19,7 +19,7 @@ namespace NET
 	/// <param name="connection">The Net Struct to use and set up.</param>
 	/// <param name="_ip">The IP to connect to.</param>
 	/// <returns>0 = Successful Setup, otherwise the error code. </returns>
-	int SetupConnection(NetInfo& connection, unsigned long _ip, Debug& _debugger)
+	int SetupServer(NetInfo& connection, unsigned long _ip, Debug& _debugger)
 	{
 		int error = 0;
 		// we are passing (2,2) in because we want to use Winsock Vers. 2.2 to communicate with
@@ -134,11 +134,7 @@ namespace NET
 	{
 		// WSA Data is used to start up the windows sockets.
 		NetInfo serverInfo;
-		sockaddr_in clientAddr;
-
-		clientAddr.sin_family = AF_INET;
-		clientAddr.sin_port = htons(SERVER_PORT);
-		clientAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+		std::string ip = "";
 
 		// Multiple Clients
 		std::vector<sockaddr_in> connectedClients;
@@ -150,7 +146,7 @@ namespace NET
 		// Buffer to read in messages
 		char buffer[BUFFER_SIZE];
 
-		int errorCode = NET::SetupConnection(serverInfo, ADDR_ANY, debugger);
+		int errorCode = NET::SetupServer(serverInfo, ADDR_ANY, debugger);
 		if (errorCode) { return errorCode; }
 
 		// binds the udp socket to the socket of the server address
@@ -168,12 +164,27 @@ namespace NET
 			return 1;
 		}
 
-		// We successfully made a UDP server and its running on the port!
-		std::string msg = "UDP Server is running on port " + std::to_string(SERVER_PORT);
+		// Print Success
+		std::string msg = "UDP Server Running.";
+		Debug::Print(msg.c_str(), LogType::System);
+		debugger.Log(msg.c_str(), LogType::System);
+		
+		// Print IP
+		msg = "IP: " + UTIL::GetIP();
+		Debug::Print(msg.c_str(), LogType::System);
+		debugger.Log(msg.c_str(), LogType::System);
+		
+		// Print Port
+		msg = "Port: " + std::to_string(SERVER_PORT);
 		Debug::Print(msg.c_str(), LogType::System);
 		debugger.Log(msg.c_str(), LogType::System);
 
 		// Receive and respond to messages
+		sockaddr_in clientAddr;
+		clientAddr.sin_family = AF_INET;
+		clientAddr.sin_port = htons(SERVER_PORT);
+		clientAddr.sin_addr.s_addr = inet_addr(UTIL::GetIP().c_str());
+
 		int clientAddrSize = sizeof(clientAddr);
 
 		// Main Server Loop
@@ -192,19 +203,15 @@ namespace NET
 			// Print out to the console what was read in.
 			Debug::Print(receivedMsg.c_str(), LogType::Client);
 			debugger.Log(receivedMsg.c_str(), LogType::Client);
-
-			// Send message to client saying we got the message
-			// Debug::Print(UTIL::MSG_Client_Recv, LogType::Server);
-			// debugger.Log(UTIL::MSG_Client_Recv, LogType::Server);
 						
 			// Write back to sender
-			int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
-			if (errorCode == SOCKET_ERROR)
-			{
-				std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
-				Debug::Print(msg.c_str(), LogType::Error);
-				debugger.Log(msg.c_str(), LogType::Error);
-			}
+			//	int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
+			//	if (errorCode == SOCKET_ERROR)
+			//	{
+			//		std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
+			//		Debug::Print(msg.c_str(), LogType::Error);
+			//		debugger.Log(msg.c_str(), LogType::Error);
+			//	}
 
 			bool unknownClient = true;
 			for (const sockaddr_in& client : connectedClients)
@@ -230,7 +237,6 @@ namespace NET
 				{
 					sendto(serverInfo.socket, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0, (sockaddr*)&client, sizeof(client));
 				}
-			
 			}
 		}
 
@@ -247,6 +253,19 @@ namespace NET
 	/// <returns>Any errors found </returns>
 	int ClientRun()
 	{
+		// get ip to connect to from user
+		std::string userIp = "";
+		while (true)
+		{
+			userIp = UTIL::UserInputMsg("IP: ");
+
+			if (inet_addr(userIp.c_str()) != INADDR_NONE)
+			{
+				// good ip entered
+				break;
+			}
+		}
+
 		// WSA Data is used to start up the windows sockets.
 		NetInfo clientInfo;
 
@@ -257,7 +276,7 @@ namespace NET
 		char clientBuffer[BUFFER_SIZE] = { 0 };
 		char serverBuffer[BUFFER_SIZE] = { 0 };
 
-		int errorCode = NET::SetupConnection(clientInfo, inet_addr(SERVER_IP), debugger);
+		int errorCode = NET::SetupServer(clientInfo, inet_addr(userIp.c_str()), debugger);
 		if (errorCode) { return errorCode; }
 
 		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
@@ -312,11 +331,13 @@ namespace NET
 					// If it was an error, get out of the loop
 					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
+					// Erase current line (asks for users input)
 					std::cout << "\x1b[2K" << '\r';
 
 					Debug::Print(serverBuffer, LogType::Server);
 					debugger.Log(serverBuffer, LogType::Server);
 
+					// re print out user input message
 					std::cout << "[You] : ";
 				}
 			}

@@ -21,7 +21,7 @@ namespace UTIL
 	};
 
 	/// <summary>
-	/// Asks the user for input
+	/// Asks the user for input, made for NETWORKING CALLS
 	/// </summary>
 	/// <param name="_buffer">The buffer to fill with input</param>
 	/// <param name="_prompt">A prompt displayed to the user</param>
@@ -42,6 +42,32 @@ namespace UTIL
 		_buffer[BUFFER_SIZE - 1] = '\0';
 	
 		return buf.empty();
+	}
+
+	std::string UserInputMsg(const char* _prompt)
+	{
+		std::cout << _prompt;
+		
+		std::string buf = "";
+		std::getline(std::cin, buf, '\n');
+		std::cin.clear();
+
+		return buf;
+	}
+
+	std::string GetIP()
+	{
+		char hostBuffer[256];
+		gethostname(hostBuffer, sizeof(hostBuffer));
+
+		hostent* host = gethostbyname(hostBuffer);
+		std::string serverIP;
+		if (host)
+		{
+			serverIP = inet_ntoa(*(in_addr*)host->h_addr);
+		}
+
+		return serverIP;
 	}
 
 	/// <summary>
