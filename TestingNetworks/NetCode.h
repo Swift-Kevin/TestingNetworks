@@ -380,9 +380,8 @@ namespace NET
 
 			std::string bufConv = _ti->buffer;
 			std::string name = bufConv.substr(1, 15);
-			std::string msg = _ti->buffer + 15;
 
-			Debug::PrintUserMessage(_ti->buffer + 1, );
+			Debug::PrintUserMessage(_ti->buffer + 15, name);
 			_ti->debugger.Log(_ti->buffer + 1, LogType::Client);
 
 			// re print out user input message
