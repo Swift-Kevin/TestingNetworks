@@ -369,7 +369,7 @@ namespace NET
 			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
 			// Erase current line (asks for users input)
-			std::cout << "\x1b[2K";
+			std::cout << "\r" << '\n' << "\x1b[A";
 
 			LogType debugType = (bool)_ti->buffer[0] ? LogType::Server : LogType::Client;
 
