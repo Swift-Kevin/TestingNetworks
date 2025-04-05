@@ -3,6 +3,14 @@
 
 namespace NET
 {
+	struct ThreadInfo
+	{
+		NetInfo& netInfo;
+		Debug& debugger;
+		char* buffer;
+		bool& runThreadLoop;
+	};
+
 	/// <summary>
 	/// Cleans Up and Close a Connection to a sockets.
 	/// </summary>
@@ -14,12 +22,25 @@ namespace NET
 	}
 
 	/// <summary>
+	/// 
+	/// </summary>
+	/// <param name="_connection"></param>
+	/// <param name="_debugger"></param>
+	/// <returns></returns>
+	int ShutdownProtocol(int _errorCode, NetInfo& _connection, Debug& _debugger)
+	{
+		NET::CloseConnection(_connection.socket);
+		_debugger.CloseLog();
+		return _errorCode;
+	}
+
+	/// <summary>
 	/// Starts winsock, creates a socket, and initializes information regarding the connection.
 	/// </summary>
 	/// <param name="connection">The Net Struct to use and set up.</param>
 	/// <param name="_ip">The IP to connect to.</param>
 	/// <returns>0 = Successful Setup, otherwise the error code. </returns>
-	int SetupServer(NetInfo& connection, unsigned long _ip, Debug& _debugger)
+	int SetupConnection(NetInfo& connection, unsigned long _ip, Debug& _debugger)
 	{
 		int error = 0;
 		// we are passing (2,2) in because we want to use Winsock Vers. 2.2 to communicate with
@@ -102,7 +123,7 @@ namespace NET
 			{
 				return lastErr;
 			}
-			else 
+			else
 			{
 				// Log Errors
 				std::string msg = "recvfrom failed! Error Code: " + std::to_string(lastErr);
@@ -146,8 +167,8 @@ namespace NET
 		// Buffer to read in messages
 		char buffer[BUFFER_SIZE];
 
-		int errorCode = NET::SetupServer(serverInfo, ADDR_ANY, debugger);
-		if (errorCode) { return errorCode; }
+		int errorCode = NET::SetupConnection(serverInfo, ADDR_ANY, debugger);
+		if (errorCode) { return ShutdownProtocol(errorCode, serverInfo, debugger); }
 
 		// binds the udp socket to the socket of the server address
 		// makes sure theres no binding error
@@ -157,23 +178,19 @@ namespace NET
 			Debug::Print(msg.c_str() + SERVER_PORT, LogType::System);
 			debugger.Log(msg.c_str() + SERVER_PORT, LogType::System);
 
-			// Clean Up Connections
-			NET::CloseConnection(serverInfo.socket);
-			debugger.CloseLog();
-
-			return 1;
+			return ShutdownProtocol(WSAGetLastError(), serverInfo, debugger);
 		}
 
 		// Print Success
 		std::string msg = "UDP Server Running.";
 		Debug::Print(msg.c_str(), LogType::System);
 		debugger.Log(msg.c_str(), LogType::System);
-		
+
 		// Print IP
 		msg = "IP: " + UTIL::GetIP();
 		Debug::Print(msg.c_str(), LogType::System);
 		debugger.Log(msg.c_str(), LogType::System);
-		
+
 		// Print Port
 		msg = "Port: " + std::to_string(SERVER_PORT);
 		Debug::Print(msg.c_str(), LogType::System);
@@ -203,7 +220,7 @@ namespace NET
 			// Print out to the console what was read in.
 			Debug::Print(receivedMsg.c_str(), LogType::Client);
 			debugger.Log(receivedMsg.c_str(), LogType::Client);
-						
+
 			// Write back to sender
 			//	int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
 			//	if (errorCode == SOCKET_ERROR)
@@ -241,9 +258,74 @@ namespace NET
 		}
 
 		// Cleanup
-		NET::CloseConnection(serverInfo.socket);
-		debugger.CloseLog();
-		return 0;
+		return ShutdownProtocol(0, serverInfo, debugger);
+	}
+
+	void ClientSend(ThreadInfo* _ti)
+	{
+		while (_ti->runThreadLoop)
+		{
+			// if buffer is empty
+			if (UTIL::UserInputMsg(_ti->buffer, "[You] : ")) { continue; }
+
+			// Send message to server
+			int bytesSent = sendto(_ti->netInfo.socket, _ti->buffer, BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
+			// If error sending bytes
+			if (bytesSent == SOCKET_ERROR)
+			{
+				// Cant put "msg" into the method call due to unscoped type
+				std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
+				Debug::Print(msg.c_str(), LogType::Error);
+				_ti->debugger.Log(msg.c_str(), LogType::Error);
+
+				break;
+			}
+
+			// Check if user exited via msg
+			if (_strnicmp(_ti->buffer, "exit", 4) == 0)
+			{
+				std::string msg = "Exit called. Breaking out of loop.";
+				Debug::Print(msg.c_str(), LogType::System);
+				_ti->debugger.Log(msg.c_str(), LogType::System);
+
+				int errorCode = sendto(_ti->netInfo.socket, _ti->buffer, BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
+				if (errorCode == SOCKET_ERROR)
+				{
+					// Cant put "msg" into the method call due to unscoped type
+					std::string msg = "sendto - EXIT - failed! Code: " + std::to_string(WSAGetLastError());
+					Debug::Print(msg.c_str(), LogType::Error);
+					_ti->debugger.Log(msg.c_str(), LogType::Error);
+				}
+
+				_ti->runThreadLoop = false;
+				break;
+			}
+		}
+	}
+
+	void ClientRecv(ThreadInfo* _ti)
+	{
+		while (_ti->runThreadLoop)
+		{
+			// Receive response from server
+			sockaddr_in fromAddr;
+			int fromLen = sizeof(fromAddr);
+
+			int sizeOfBytesRecv = NET::TryRecieve(_ti->netInfo, _ti->buffer, (sockaddr*)&fromAddr, &fromLen, _ti->debugger);
+			// if it would have blocked, skip over it.
+			if (sizeOfBytesRecv == WSAEWOULDBLOCK || sizeOfBytesRecv == WSAEINVAL) { continue; }
+			// If it was an error, get out of the loop
+			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+
+			// Erase current line (asks for users input)
+			std::cout << "\x1b[2K";
+
+			Debug::Print(_ti->buffer, LogType::Server);
+			_ti->debugger.Log(_ti->buffer, LogType::Server);
+
+			// re print out user input message
+			std::cout << "[You] : ";
+		}
 	}
 
 	/// <summary>
@@ -253,18 +335,13 @@ namespace NET
 	/// <returns>Any errors found </returns>
 	int ClientRun()
 	{
-		// get ip to connect to from user
-		std::string userIp = "";
-		while (true)
-		{
-			userIp = UTIL::UserInputMsg("IP: ");
+		std::string username = UTIL::UserInputMsg("Display Name: ");
 
-			if (inet_addr(userIp.c_str()) != INADDR_NONE)
-			{
-				// good ip entered
-				break;
-			}
-		}
+		// Get IP to connect to from user
+		std::string userEnteredIP = "";
+		do {
+			userEnteredIP = UTIL::UserInputMsg("IP: ");
+		} while (inet_addr(userEnteredIP.c_str()) == INADDR_NONE);
 
 		// WSA Data is used to start up the windows sockets.
 		NetInfo clientInfo;
@@ -276,80 +353,25 @@ namespace NET
 		char clientBuffer[BUFFER_SIZE] = { 0 };
 		char serverBuffer[BUFFER_SIZE] = { 0 };
 
-		int errorCode = NET::SetupServer(clientInfo, inet_addr(userIp.c_str()), debugger);
-		if (errorCode) { return errorCode; }
+		int errorCode = NET::SetupConnection(clientInfo, inet_addr(userEnteredIP.c_str()), debugger);
+		if (errorCode) { return ShutdownProtocol(errorCode, clientInfo, debugger); }
 
 		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
 
 		bool runThreadLoop = true;
-		
-		std::thread sendThread([&]()
-			{
-				while (runThreadLoop)
-				{
-					// if buffer is empty
-					if (UTIL::UserInputMsg(clientBuffer, "[You] : ")) { continue; }
 
-					// Send message to server
-					int bytesSent = sendto(clientInfo.socket, clientBuffer, BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
-					// If error sending bytes
-					if (bytesSent == SOCKET_ERROR)
-					{
-						// Cant put "msg" into the method call due to unscoped type
-						std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
-						Debug::Print(msg.c_str(), LogType::Error);
-						debugger.Log(msg.c_str(), LogType::Error);
+		ThreadInfo sendThreadInfo = { clientInfo, debugger, clientBuffer, runThreadLoop };
+		ThreadInfo recvThreadInfo = { clientInfo, debugger, serverBuffer, runThreadLoop };
 
-						break;
-					}
-
-					// Check if user exited via msg
-					if (_strnicmp(clientBuffer, "exit", 4) == 0)
-					{
-						std::string msg = "Exit called. Breaking out of loop.";
-						Debug::Print(msg.c_str(), LogType::System);
-						debugger.Log(msg.c_str(), LogType::System);
-
-						runThreadLoop = false;
-						break;
-					}
-				}
-			}
-		);
-
-		std::thread recvThread([&]()
-			{
-				while (runThreadLoop)
-				{
-					// Receive response from server
-					sockaddr_in fromAddr;
-					int fromLen = sizeof(fromAddr);
-
-					int sizeOfBytesRecv = NET::TryRecieve(clientInfo, serverBuffer, (sockaddr*)&fromAddr, &fromLen, debugger);
-					// if it would have blocked, skip over it.
-					if (sizeOfBytesRecv == WSAEWOULDBLOCK || sizeOfBytesRecv == WSAEINVAL) { continue; }
-					// If it was an error, get out of the loop
-					if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
-
-					// Erase current line (asks for users input)
-					std::cout << "\x1b[2K" << '\r';
-
-					Debug::Print(serverBuffer, LogType::Server);
-					debugger.Log(serverBuffer, LogType::Server);
-
-					// re print out user input message
-					std::cout << "[You] : ";
-				}
-			}
-		);
+		std::thread sendThread(ClientSend, &sendThreadInfo);
+		std::thread recvThread(ClientRecv, &recvThreadInfo);
 
 		// Blocks main thread from running.
 		// Good b/c I want a thread for I&O
 		sendThread.join();
 		recvThread.join();
 
-		NET::CloseConnection(clientInfo.socket);
-		debugger.CloseLog();
-		return 0;
+		// Cleanup
+		return ShutdownProtocol(0, clientInfo, debugger);
 	}
 }
