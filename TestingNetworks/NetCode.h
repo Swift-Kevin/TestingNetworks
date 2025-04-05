@@ -158,14 +158,15 @@ namespace NET
 		std::string ip = "";
 
 		// Multiple Clients
-		std::vector<sockaddr_in> connectedClients;
+		//std::map<sockaddr_in, std::string> connectedClients;
+		std::vector<ClientStorage> connectedClients;
 
 		// Start custom debugger (log files / messages)
 		Debug debugger;
 		debugger.StartLog();
 
 		// Buffer to read in messages
-		char buffer[BUFFER_SIZE];
+		char buffer[TOTAL_BUFFER_SIZE];
 
 		int errorCode = NET::SetupConnection(serverInfo, ADDR_ANY, debugger);
 		if (errorCode) { return ShutdownProtocol(errorCode, serverInfo, debugger); }
@@ -203,57 +204,108 @@ namespace NET
 		clientAddr.sin_addr.s_addr = inet_addr(UTIL::GetIP().c_str());
 
 		int clientAddrSize = sizeof(clientAddr);
+		int sizeOfBytesRecv = 0;
+		UTIL::BufferTypes bufferType;
+
+		bool runServer = true;
 
 		// Main Server Loop
-		while (true)
+		while (runServer)
 		{
-			int sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
+			// Server Runner wants to quit.
+			if (GetAsyncKeyState(VK_ESCAPE))
+			{
+				// tell all connected clients to disconnect.
+				// break out of loop
+				runServer = false;
+			}
 
+			sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
+
+			// Check for errors
 			if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
-
-			// break out of loop, so we can still clean socket
 			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
 
-			// Make debug message
-			std::string receivedMsg = "User: [" + std::string(inet_ntoa(clientAddr.sin_addr)) + "]: " + buffer;
+			bufferType = (UTIL::BufferTypes)((char)buffer[0]);
 
-			// Print out to the console what was read in.
-			Debug::Print(receivedMsg.c_str(), LogType::Client);
-			debugger.Log(receivedMsg.c_str(), LogType::Client);
-
-			// Write back to sender
-			//	int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
-			//	if (errorCode == SOCKET_ERROR)
-			//	{
-			//		std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
-			//		Debug::Print(msg.c_str(), LogType::Error);
-			//		debugger.Log(msg.c_str(), LogType::Error);
-			//	}
-
-			bool unknownClient = true;
-			for (const sockaddr_in& client : connectedClients)
+			switch (bufferType)
 			{
-				if ((client.sin_addr.s_addr == clientAddr.sin_addr.s_addr) && (client.sin_port == clientAddr.sin_port))
+			case UTIL::BufferTypes::Server:
+			{
+				// Client should not be sending 'server' status messages.
+				// there is an error in the code somewhere causing this.
+				throw("ERROR in Client Code. Client sent message with first character as 'Server' (0). Check call stack.");
+				break;
+			}
+			case UTIL::BufferTypes::Client:
+			{
+				// Make debug message
+				std::string rcvMsg = (buffer + 1);
+
+				int idx = UTIL::FindIDXOfClient(connectedClients, clientAddr);
+				if (idx == -1)
 				{
-					unknownClient = false;
+					std::string msg = "Not found in list.";
+					Debug::Print(msg.c_str(), LogType::Server);
+					debugger.Log(msg.c_str(), LogType::Server);
 					break;
 				}
-			}
 
-			if (unknownClient)
-			{
-				Debug::Print("Connected New User", LogType::Server);
-				connectedClients.push_back(clientAddr);
-			}
+				std::string printMsg = '[' + connectedClients[idx].name + "] : " + rcvMsg;
+				printMsg = (char)UTIL::BufferTypes::Client + printMsg;
 
-			// send to all connected clients, except client who sent it
-			for (const sockaddr_in& client : connectedClients)
-			{
-				// not client who originally sent the message
-				if (!(client.sin_addr.s_addr == clientAddr.sin_addr.s_addr && client.sin_port == clientAddr.sin_port))
+				// Print out to the console what was read in.
+				Debug::PrintUserMessage((buffer + 1), connectedClients[idx].name);
+				debugger.Log(printMsg.c_str(), LogType::Client);
+
+				// send to all connected clients, except client who sent it
+				for (const auto& [saddr, name] : connectedClients)
 				{
-					sendto(serverInfo.socket, receivedMsg.c_str(), (int)strlen(receivedMsg.c_str()), 0, (sockaddr*)&client, sizeof(client));
+					// not client who originally sent the message
+					if (!(saddr.sin_addr.s_addr == clientAddr.sin_addr.s_addr && saddr.sin_port == clientAddr.sin_port))
+					{
+						sendto(serverInfo.socket, printMsg.c_str(), (int)strlen(printMsg.c_str()), 0, (sockaddr*)&saddr, sizeof(saddr));
+					}
 				}
+				break;
+			}
+			case UTIL::BufferTypes::Join:
+			{
+				std::string msg = "New User - ";
+				msg += (buffer + 1);
+
+				Debug::Print(msg.c_str(), LogType::Server);
+
+				ClientStorage add;
+				add.addr = clientAddr;
+				add.name = (buffer + 1);
+				connectedClients.push_back(add);
+
+				// Write back to sender
+				//	int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
+				//	if (errorCode == SOCKET_ERROR)
+				//	{
+				//		std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
+				//		Debug::Print(msg.c_str(), LogType::Error);
+				//		debugger.Log(msg.c_str(), LogType::Error);
+				//	}
+				break;
+			}
+			case UTIL::BufferTypes::Disconnect:
+			{
+				int idx = UTIL::FindIDXOfClient(connectedClients, clientAddr);
+				if (idx == -1)
+				{
+					std::string msg = "D/C Case -- Not found in list.";
+					Debug::Print(msg.c_str(), LogType::Server);
+					debugger.Log(msg.c_str(), LogType::Server);
+					break;
+				}
+
+				break;
+			}
+			default:
+				break;
 			}
 		}
 
@@ -269,7 +321,7 @@ namespace NET
 			if (UTIL::UserInputMsg(_ti->buffer, "[You] : ")) { continue; }
 
 			// Send message to server
-			int bytesSent = sendto(_ti->netInfo.socket, _ti->buffer, BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
+			int bytesSent = sendto(_ti->netInfo.socket, _ti->buffer, TOTAL_BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
 			// If error sending bytes
 			if (bytesSent == SOCKET_ERROR)
 			{
@@ -288,7 +340,8 @@ namespace NET
 				Debug::Print(msg.c_str(), LogType::System);
 				_ti->debugger.Log(msg.c_str(), LogType::System);
 
-				int errorCode = sendto(_ti->netInfo.socket, _ti->buffer, BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
+				_ti->buffer[0] = (char)UTIL::BufferTypes::Disconnect;
+				int errorCode = sendto(_ti->netInfo.socket, _ti->buffer, TOTAL_BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
 				if (errorCode == SOCKET_ERROR)
 				{
 					msg = "sendto - EXIT - failed! Code: " + std::to_string(WSAGetLastError());
@@ -321,8 +374,16 @@ namespace NET
 
 			LogType debugType = (bool)_ti->buffer[0] ? LogType::Server : LogType::Client;
 
-			Debug::Print(_ti->buffer, debugType);
-			_ti->debugger.Log(_ti->buffer, debugType);
+			UTIL::BufferTypes bufferType = (UTIL::BufferTypes)((char)_ti->buffer[0]);
+			if (bufferType == UTIL::BufferTypes::Disconnect || bufferType == UTIL::BufferTypes::Join)
+				continue;
+
+			std::string bufConv = _ti->buffer;
+			std::string name = bufConv.substr(1, 15);
+			std::string msg = _ti->buffer + 15;
+
+			Debug::PrintUserMessage(_ti->buffer + 1, );
+			_ti->debugger.Log(_ti->buffer + 1, LogType::Client);
 
 			// re print out user input message
 			std::cout << "[You] : ";
@@ -336,7 +397,7 @@ namespace NET
 	/// <returns>Any errors found </returns>
 	int ClientRun()
 	{
-		std::string username = UTIL::UserInputMsg("Display Name: ");
+		std::string clientName = UTIL::UserInputMsg("Display Name (1-15 characters): ", 15);
 
 		// Get IP to connect to from user
 		std::string userEnteredIP = "";
@@ -351,14 +412,17 @@ namespace NET
 		debugger.StartLog();
 
 		// Buffers to read messages to
-		char clientBuffer[BUFFER_SIZE] = { 0 };
-		char serverBuffer[BUFFER_SIZE] = { 0 };
+		char clientBuffer[TOTAL_BUFFER_SIZE] = { 0 };
+		char serverBuffer[TOTAL_BUFFER_SIZE] = { 0 };
 
 		int errorCode = NET::SetupConnection(clientInfo, inet_addr(userEnteredIP.c_str()), debugger);
 		if (errorCode) { return ShutdownProtocol(errorCode, clientInfo, debugger); }
 
-		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
+		// Send name over to server
+		clientName = (char)UTIL::BufferTypes::Join + clientName + '\0';
+		int bytesSent = sendto(clientInfo.socket, clientName.c_str(), TOTAL_BUFFER_SIZE, 0, (sockaddr*)&clientInfo.addr, sizeof(clientInfo.addr));
 
+		Debug::Print("UDP Client ready. Type messages to send to the server.", LogType::System);
 		bool runThreadLoop = true;
 
 		ThreadInfo sendThreadInfo = { clientInfo, debugger, clientBuffer, runThreadLoop };

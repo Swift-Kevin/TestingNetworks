@@ -8,6 +8,7 @@
 // Windows API's
 #include <iostream>
 #include <string>
+#include <map>
 #include <fstream>
 #include <chrono>
 #include <filesystem>
@@ -21,9 +22,15 @@ const char* SERVER_IP = "127.0.0.1";
 // Defining the port and buffer size so I can reuse without having to worry about it
 #define SERVER_PORT 31337
 #define BUFFER_SIZE 512
+#define TOTAL_BUFFER_SIZE BUFFER_SIZE + 16
 
 struct NetInfo {
 	WSADATA wsaData;
 	SOCKET socket;
 	sockaddr_in addr;
+};
+
+struct ClientStorage {
+	sockaddr_in addr;
+	std::string name;
 };

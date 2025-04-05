@@ -212,7 +212,7 @@ public:
 	/// <param name="_type">The users name to display</param>
 	static void PrintUserMessage(const char* _message, std::string _user)
 	{
-		UTIL::SetForegroundColor(UTIL::ConsoleColor::Green);
+		UTIL::SetForegroundColor(UTIL::ConsoleColor::Yellow);
 		std::cout << '[' << _user << "] : ";
 		// print out rest of message in white
 		UTIL::SetForegroundColor(UTIL::ConsoleColor::Default);

@@ -23,7 +23,9 @@ namespace UTIL
 	enum class BufferTypes
 	{
 		Server,
-		User
+		Client,
+		Join,
+		Disconnect,
 	};
 
 	/// <summary>
@@ -35,7 +37,7 @@ namespace UTIL
 	bool UserInputMsg(char* _buffer, const char* _prompt)
 	{
 		std::cout << _prompt;
-		
+
 		// Get Input
 		std::string buf = "";
 		std::getline(std::cin, buf, '\n');
@@ -46,8 +48,8 @@ namespace UTIL
 
 		_buffer[BUFFER_SIZE - 1] = '\0';
 		// This is a user message. prepend that to buffer.
-		_buffer[0] = (int)UTIL::BufferTypes::User;
-	
+		_buffer[0] = (int)UTIL::BufferTypes::Client;
+
 		return buf.empty();
 	}
 
@@ -59,10 +61,29 @@ namespace UTIL
 	std::string UserInputMsg(const char* _prompt)
 	{
 		std::cout << _prompt;
-		
+
 		std::string buf = "";
 		std::getline(std::cin, buf, '\n');
 		std::cin.clear();
+
+		return buf;
+	}
+
+	/// <summary>
+	/// Gets an input from the user with a prompt
+	/// </summary>
+	/// <param name="_prompt">To display to the user, the question to ask</param>
+	/// <param name="maxChar">Maximum number of characters to input</param>
+	/// <returns>The users response</returns>
+	std::string UserInputMsg(const char* _prompt, int maxChar)
+	{
+		std::cout << _prompt;
+		std::string buf = "";
+
+		do {
+			std::getline(std::cin, buf, '\n');
+			std::cin.clear();
+		} while (buf.empty() || buf.size() > maxChar);
 
 		return buf;
 	}
@@ -93,5 +114,19 @@ namespace UTIL
 	void SetForegroundColor(ConsoleColor foreColor)
 	{
 		std::cout << "\x1B" << "[" << (int)foreColor + 30 << "m";
+	}
+
+	int FindIDXOfClient(std::vector<ClientStorage>& _list, sockaddr_in _check)
+	{
+		for (int i = 0; i < _list.size(); i++)
+		{
+			if (_list[i].addr.sin_addr.S_un.S_addr == _check.sin_addr.S_un.S_addr)
+			{
+				return i;
+			}
+		}
+
+		// not in list
+		return -1;
 	}
 }
