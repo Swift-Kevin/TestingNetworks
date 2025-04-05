@@ -251,8 +251,9 @@ namespace NET
 					break;
 				}
 
-				std::string printMsg = connectedClients[idx].name + rcvMsg;
-				printMsg = (char)UTIL::BufferTypes::Client + printMsg;
+				char nameBuffer[15] = " ";
+				strcpy_s(nameBuffer, 15, connectedClients[idx].name);
+				std::string printMsg = (char)UTIL::BufferTypes::Client + nameBuffer + rcvMsg;
 
 				// Print out to the console what was read in.
 				Debug::PrintUserMessage((buffer + 1), connectedClients[idx].name);
@@ -376,7 +377,7 @@ namespace NET
 			if (bufferType == UTIL::BufferTypes::Disconnect || bufferType == UTIL::BufferTypes::Join)
 				continue;
 
-			std::string bufConv = _ti->buffer;
+			std::string bufConv = _ti->buffer; 
 			std::string name = bufConv.substr(1, 15);
 
 			Debug::PrintUserMessage(_ti->buffer + 15, name);
