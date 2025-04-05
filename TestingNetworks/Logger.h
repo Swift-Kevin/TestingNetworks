@@ -205,4 +205,17 @@ public:
 		std::cout << _message << "\n\0";
 	}
 
+	/// <summary>
+	/// Prints a message that was sent by a user that is not self
+	/// </summary>
+	/// <param name="_message"></param>
+	/// <param name="_type"></param>
+	static void PrintUserMessage(const char* _message, std::string _user)
+	{
+		UTIL::SetForegroundColor(UTIL::ConsoleColor::Green);
+		std::cout << _user;
+		// print out rest of message in white
+		UTIL::SetForegroundColor(UTIL::ConsoleColor::Default);
+		std::cout << _message << "\n\0";
+	}
 };
