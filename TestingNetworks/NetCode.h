@@ -282,7 +282,7 @@ namespace NET
 			}
 
 			// Check if user exited via msg
-			if (_strnicmp(_ti->buffer, "exit", 4) == 0)
+			if (_strnicmp(_ti->buffer + 1, "exit", 4) == 0)
 			{
 				std::string msg = "Exit called. Breaking out of loop.";
 				Debug::Print(msg.c_str(), LogType::System);
@@ -291,8 +291,7 @@ namespace NET
 				int errorCode = sendto(_ti->netInfo.socket, _ti->buffer, BUFFER_SIZE, 0, (sockaddr*)&_ti->netInfo.addr, sizeof(_ti->netInfo.addr));
 				if (errorCode == SOCKET_ERROR)
 				{
-					// Cant put "msg" into the method call due to unscoped type
-					std::string msg = "sendto - EXIT - failed! Code: " + std::to_string(WSAGetLastError());
+					msg = "sendto - EXIT - failed! Code: " + std::to_string(WSAGetLastError());
 					Debug::Print(msg.c_str(), LogType::Error);
 					_ti->debugger.Log(msg.c_str(), LogType::Error);
 				}
@@ -320,8 +319,10 @@ namespace NET
 			// Erase current line (asks for users input)
 			std::cout << "\x1b[2K";
 
-			Debug::Print(_ti->buffer, LogType::Server);
-			_ti->debugger.Log(_ti->buffer, LogType::Server);
+			LogType debugType = (bool)_ti->buffer[0] ? LogType::Server : LogType::Client;
+
+			Debug::Print(_ti->buffer, debugType);
+			_ti->debugger.Log(_ti->buffer, debugType);
 
 			// re print out user input message
 			std::cout << "[You] : ";

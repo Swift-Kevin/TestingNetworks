@@ -20,6 +20,12 @@ namespace UTIL
 		Default = 9
 	};
 
+	enum class BufferTypes
+	{
+		Server,
+		User
+	};
+
 	/// <summary>
 	/// Asks the user for input, made for NETWORKING CALLS
 	/// </summary>
@@ -35,15 +41,21 @@ namespace UTIL
 		std::getline(std::cin, buf, '\n');
 
 		// Copy it over to buffer
-		std::strncpy(_buffer, buf.c_str(), BUFFER_SIZE - 1);
-
+		std::strncpy(_buffer + 1, buf.c_str(), BUFFER_SIZE - 1);
 		std::cin.clear();
-		//std::cin.ignore(INT_MAX, '\n');
+
 		_buffer[BUFFER_SIZE - 1] = '\0';
+		// This is a user message. prepend that to buffer.
+		_buffer[0] = (int)UTIL::BufferTypes::User;
 	
 		return buf.empty();
 	}
 
+	/// <summary>
+	/// Gets an input from the user with a prompt
+	/// </summary>
+	/// <param name="_prompt">To display to the user, the question to ask</param>
+	/// <returns>The users response</returns>
 	std::string UserInputMsg(const char* _prompt)
 	{
 		std::cout << _prompt;
@@ -55,6 +67,10 @@ namespace UTIL
 		return buf;
 	}
 
+	/// <summary>
+	/// Gets the IP of the current machine
+	/// </summary>
+	/// <returns>IP in string format</returns>
 	std::string GetIP()
 	{
 		char hostBuffer[256];

@@ -20,7 +20,7 @@ const char* SERVER_IP = "127.0.0.1";
 
 // Defining the port and buffer size so I can reuse without having to worry about it
 #define SERVER_PORT 31337
-#define BUFFER_SIZE 512 
+#define BUFFER_SIZE 512
 
 struct NetInfo {
 	WSADATA wsaData;
