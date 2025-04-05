@@ -32,5 +32,5 @@ struct NetInfo {
 
 struct ClientStorage {
 	sockaddr_in addr;
-	std::string name;
+	char* name = nullptr;
 };

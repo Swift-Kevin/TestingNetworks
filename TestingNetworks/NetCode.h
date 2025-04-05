@@ -251,7 +251,7 @@ namespace NET
 					break;
 				}
 
-				std::string printMsg = '[' + connectedClients[idx].name + "] : " + rcvMsg;
+				std::string printMsg = connectedClients[idx].name + rcvMsg;
 				printMsg = (char)UTIL::BufferTypes::Client + printMsg;
 
 				// Print out to the console what was read in.
@@ -278,17 +278,12 @@ namespace NET
 
 				ClientStorage add;
 				add.addr = clientAddr;
-				add.name = (buffer + 1);
-				connectedClients.push_back(add);
 
-				// Write back to sender
-				//	int errorCode = sendto(serverInfo.socket, UTIL::MSG_Client_Recv, (int)strlen(UTIL::MSG_Client_Recv), 0, (sockaddr*)&clientAddr, clientAddrSize);
-				//	if (errorCode == SOCKET_ERROR)
-				//	{
-				//		std::string msg = "sendto failed! Code: " + std::to_string(WSAGetLastError());
-				//		Debug::Print(msg.c_str(), LogType::Error);
-				//		debugger.Log(msg.c_str(), LogType::Error);
-				//	}
+				char* dynName = new char[15];
+				strcpy_s(dynName, 15, buffer + 1);
+				add.name = dynName;
+
+				connectedClients.push_back(add);
 				break;
 			}
 			case UTIL::BufferTypes::Disconnect:
@@ -301,6 +296,9 @@ namespace NET
 					debugger.Log(msg.c_str(), LogType::Server);
 					break;
 				}
+
+				delete[] connectedClients[idx].name;
+				connectedClients.erase(connectedClients.begin() + idx);
 
 				break;
 			}
