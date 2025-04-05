@@ -252,11 +252,21 @@ namespace NET
 				}
 
 				char nameBuffer[15] = {};
-				memcpy(nameBuffer, " ", 15);
+				//strcpy_s(nameBuffer, 15, connectedClients[idx].name);
 
-				strcpy_s(nameBuffer, 15, connectedClients[idx].name);
+				for (int i = 0; i < 15; i++)
+				{
+					char cmp = connectedClients[idx].name[i];
+					if ((cmp > 'a' && cmp <= 'z') || (cmp > 'A' && cmp <= 'Z'))
+						nameBuffer[i] = cmp;
+					else
+						nameBuffer[i] = ' ';
+				}
+				nameBuffer[14] = '\0';
+
 				std::string printMsg = " ";
-				printMsg += nameBuffer + rcvMsg;
+				printMsg += nameBuffer;
+				printMsg += rcvMsg;
 				printMsg[0] = ((int)UTIL::BufferTypes::Client);
 
 				// Print out to the console what was read in.
@@ -383,6 +393,7 @@ namespace NET
 
 			std::string bufConv = _ti->buffer; 
 			std::string name = bufConv.substr(1, 15);
+			name = name.substr(0, name.find_first_of(' '));
 
 			Debug::PrintUserMessage(_ti->buffer + 15, name);
 			_ti->debugger.Log(_ti->buffer + 1, LogType::Client);
