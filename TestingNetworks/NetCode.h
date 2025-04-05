@@ -251,9 +251,9 @@ namespace NET
 					break;
 				}
 
-				char nameBuffer[15] = " ";
+				char nameBuffer[15] = {};
 				strcpy_s(nameBuffer, 15, connectedClients[idx].name);
-				std::string printMsg = (char)UTIL::BufferTypes::Client + nameBuffer + rcvMsg;
+				std::string printMsg = ((int)UTIL::BufferTypes::Client) + nameBuffer + rcvMsg;
 
 				// Print out to the console what was read in.
 				Debug::PrintUserMessage((buffer + 1), connectedClients[idx].name);
