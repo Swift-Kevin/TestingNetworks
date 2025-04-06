@@ -24,6 +24,15 @@ const char* SERVER_IP = "127.0.0.1";
 #define BUFFER_SIZE 512
 #define TOTAL_BUFFER_SIZE BUFFER_SIZE + 16
 
+namespace SCREEN
+{
+	const wchar_t CLASS_NAME[] = L"BasicWindow";
+	int winX = CW_USEDEFAULT;
+	int winY = CW_USEDEFAULT;
+	int winWidth = 800;
+	int winHeight = 600;
+}
+
 struct NetInfo {
 	WSADATA wsaData;
 	SOCKET socket;
