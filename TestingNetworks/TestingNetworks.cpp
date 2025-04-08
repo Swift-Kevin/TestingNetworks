@@ -21,41 +21,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		break;
 	}
-	case WM_COMMAND:
-	{
-		HWND top = GetParent(hwnd);
-		if (top)
-		{
-			SendMessage(top, msg, wParam, lParam);
-			break;
-		}
-
-		if (LOWORD(wParam) == 1)
-		{
-			SetWindowText(hwnd, L"Server Mode");
-			
-			// Show Server Boxes
-			ShowWindow(clientWindows.messageBox, SW_SHOW);
-			ShowWindow(clientWindows.historyBox, SW_SHOW);
-
-			// Hide Main Menu Buttons
-			ShowWindow(mainMenuHandles.clientButton, SW_HIDE);
-			ShowWindow(mainMenuHandles.serverButton, SW_HIDE);
-			ShowWindow(mainMenuHandles.exitButton, SW_HIDE);
-
-		}
-		else if (LOWORD(wParam) == 2)
-		{
-			SetWindowText(hwnd, L"Client Mode");
-
-		}
-		else if (LOWORD(wParam) == 3)
-		{
-			PostQuitMessage(0);
-		}
-
-		break;
-	}
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
@@ -64,8 +29,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		RECT rect;
 		GetClientRect(hwnd, &rect);
 		FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW + 1));
-
-		// Draw Content after refresh?
 
 		EndPaint(hwnd, &ps);
 		break;

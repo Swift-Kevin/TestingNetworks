@@ -25,20 +25,20 @@ struct ServerWindowHandles {
 	HWND messageBox;
 } serverWindows;
 
-namespace WinMan
+namespace MyWinProcs
 {
 	LRESULT CALLBACK MainMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
-		HWND top = GetParent(hwnd);
-		if (top)
-		{
-			SendMessage(top, msg, wParam, lParam);
-		}
-
 		switch (msg)
 		{
 		case WM_COMMAND:
 		{
+			HWND top = GetParent(hwnd);
+			if (top)
+			{
+				SendMessage(top, msg, wParam, lParam);
+			}
+
 			if (LOWORD(wParam) == 1)
 			{
 				SetWindowText(hwnd, L"Server Mode");
@@ -51,7 +51,6 @@ namespace WinMan
 				ShowWindow(mainMenuHandles.clientButton, SW_HIDE);
 				ShowWindow(mainMenuHandles.serverButton, SW_HIDE);
 				ShowWindow(mainMenuHandles.exitButton, SW_HIDE);
-
 			}
 			else if (LOWORD(wParam) == 2)
 			{
@@ -71,7 +70,52 @@ namespace WinMan
 
 		return DefWindowProc(hwnd, msg, wParam, lParam);
 	}
+	
+	LRESULT CALLBACK ServerMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (msg)
+		{
+		case WM_COMMAND:
+		{
+			HWND top = GetParent(hwnd);
+			if (top)
+			{
+				SendMessage(top, msg, wParam, lParam);
+			}
 
+			break;
+		}
+		default:
+			break;
+		}
+
+		return DefWindowProc(hwnd, msg, wParam, lParam);
+	}
+
+	LRESULT CALLBACK ClientMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (msg)
+		{
+		case WM_COMMAND:
+		{
+			HWND top = GetParent(hwnd);
+			if (top)
+			{
+				SendMessage(top, msg, wParam, lParam);
+			}
+
+			break;
+		}
+		default:
+			break;
+		}
+
+		return DefWindowProc(hwnd, msg, wParam, lParam);
+	}
+}
+
+namespace WinMan
+{
 	void CreateMainMenu(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 		CREATESTRUCT* cs = (CREATESTRUCT*)lParam;
@@ -118,7 +162,7 @@ namespace WinMan
 			mainMenu, (HMENU)3, hInstance, nullptr
 		);
 
-		SetWindowLongPtr(mainMenu, GWLP_WNDPROC, (LONG_PTR)MainMenuProc);
+		SetWindowLongPtr(mainMenu, GWLP_WNDPROC, (LONG_PTR)MyWinProcs::MainMenuProc);
 
 	}
 
@@ -165,11 +209,4 @@ namespace WinMan
 		int midX = (int)(rc.right * 0.5f);
 		int midY = (int)(rc.bottom * 0.5f);
 	}
-
-
-	void ClientButtonHit()
-	{
-
-	}
-
 }
