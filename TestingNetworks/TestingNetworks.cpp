@@ -12,8 +12,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		RECT rc;
 		GetClientRect(hwnd, &rc);
 
-		int midX = rc.right * 0.5f;
-		int midY = rc.bottom * 0.5f;
+		int midX = (int)(rc.right * 0.5f);
+		int midY = (int)(rc.bottom * 0.5f);
 
 		WinMan::CreateMainMenu(hwnd, msg, wParam, lParam);
 		WinMan::CreateServerMenu(hwnd, msg, wParam, lParam);
@@ -23,6 +23,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	case WM_COMMAND:
 	{
+		HWND top = GetParent(hwnd);
+		if (top)
+		{
+			SendMessage(top, msg, wParam, lParam);
+			break;
+		}
+
 		if (LOWORD(wParam) == 1)
 		{
 			SetWindowText(hwnd, L"Server Mode");

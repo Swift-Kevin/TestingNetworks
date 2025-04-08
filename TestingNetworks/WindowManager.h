@@ -27,6 +27,51 @@ struct ServerWindowHandles {
 
 namespace WinMan
 {
+	LRESULT CALLBACK MainMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+	{
+		HWND top = GetParent(hwnd);
+		if (top)
+		{
+			SendMessage(top, msg, wParam, lParam);
+		}
+
+		switch (msg)
+		{
+		case WM_COMMAND:
+		{
+			if (LOWORD(wParam) == 1)
+			{
+				SetWindowText(hwnd, L"Server Mode");
+
+				// Show Server Boxes
+				ShowWindow(clientWindows.messageBox, SW_SHOW);
+				ShowWindow(clientWindows.historyBox, SW_SHOW);
+
+				// Hide Main Menu Buttons
+				ShowWindow(mainMenuHandles.clientButton, SW_HIDE);
+				ShowWindow(mainMenuHandles.serverButton, SW_HIDE);
+				ShowWindow(mainMenuHandles.exitButton, SW_HIDE);
+
+			}
+			else if (LOWORD(wParam) == 2)
+			{
+				SetWindowText(hwnd, L"Client Mode");
+
+			}
+			else if (LOWORD(wParam) == 3)
+			{
+				PostQuitMessage(0);
+			}
+
+			break;
+		}
+		default:
+			break;
+		}
+
+		return DefWindowProc(hwnd, msg, wParam, lParam);
+	}
+
 	void CreateMainMenu(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 		CREATESTRUCT* cs = (CREATESTRUCT*)lParam;
@@ -35,8 +80,8 @@ namespace WinMan
 		RECT rc;
 		GetClientRect(hwnd, &rc);
 
-		int midX = rc.right * 0.5f;
-		int midY = rc.bottom * 0.5f;
+		int midX = (int)(rc.right * 0.5f);
+		int midY = (int)(rc.bottom * 0.5f);
 
 		mainMenu = CreateWindowEx(
 			0, L"STATIC", L"MainMenu",
@@ -72,6 +117,9 @@ namespace WinMan
 			midX - 50, midY + 150, 100, 50,
 			mainMenu, (HMENU)3, hInstance, nullptr
 		);
+
+		SetWindowLongPtr(mainMenu, GWLP_WNDPROC, (LONG_PTR)MainMenuProc);
+
 	}
 
 	void CreateServerMenu(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -82,8 +130,8 @@ namespace WinMan
 		RECT rc;
 		GetClientRect(hwnd, &rc);
 
-		int midX = rc.right * 0.5f;
-		int midY = rc.bottom * 0.5f;
+		int midX = (int)(rc.right * 0.5f);
+		int midY = (int)(rc.bottom * 0.5f);
 
 		clientWindows.historyBox = CreateWindowEx(
 			0, L"STATIC", L"History",
@@ -114,10 +162,10 @@ namespace WinMan
 		RECT rc;
 		GetClientRect(hwnd, &rc);
 
-		int midX = rc.right * 0.5f;
-		int midY = rc.bottom * 0.5f;
+		int midX = (int)(rc.right * 0.5f);
+		int midY = (int)(rc.bottom * 0.5f);
 	}
-	
+
 
 	void ClientButtonHit()
 	{
