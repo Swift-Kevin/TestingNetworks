@@ -1,9 +1,4 @@
-#include "NetCode.h"
-
-HWND clientButton;
-HWND serverButton;
-HWND exitButton;
-HWND appLabel;
+#include "WindowManager.h"
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -20,33 +15,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		int midX = rc.right * 0.5f;
 		int midY = rc.bottom * 0.5f;
 
-		appLabel = CreateWindowEx(
-			0, L"STATIC", L"UDP Application",
-			WS_CHILD | WS_VISIBLE | SS_CENTER,
-			midX - 50, 10, 100, 50,
-			hwnd, nullptr, hInstance, nullptr
-		);
-		
-		serverButton = CreateWindowEx(
-			0, L"BUTTON", L"Server",
-			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-			midX - 50, midY, 100, 50,
-			hwnd, (HMENU)1, hInstance, nullptr
-		);
-
-		clientButton = CreateWindowEx(
-			0, L"BUTTON", L"Client",
-			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-			midX - 50, midY + 75, 100, 50,
-			hwnd, (HMENU)2, hInstance, nullptr
-		);
-
-		exitButton = CreateWindowEx(
-			0, L"BUTTON", L"Exit",
-			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-			midX - 50, midY + 150, 100, 50,
-			hwnd, (HMENU)3, hInstance, nullptr
-		);
+		WinMan::CreateMainMenu(hwnd, msg, wParam, lParam);
+		WinMan::CreateServerMenu(hwnd, msg, wParam, lParam);
+		WinMan::CreateClientMenu(hwnd, msg, wParam, lParam);
 
 		break;
 	}
@@ -55,11 +26,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		if (LOWORD(wParam) == 1)
 		{
 			SetWindowText(hwnd, L"Server Mode");
+			
+			// Show Server Boxes
+			ShowWindow(clientWindows.messageBox, SW_SHOW);
+			ShowWindow(clientWindows.historyBox, SW_SHOW);
+
+			// Hide Main Menu Buttons
+			ShowWindow(mainMenuHandles.clientButton, SW_HIDE);
+			ShowWindow(mainMenuHandles.serverButton, SW_HIDE);
+			ShowWindow(mainMenuHandles.exitButton, SW_HIDE);
+
 		}
 		else if (LOWORD(wParam) == 2)
 		{
 			SetWindowText(hwnd, L"Client Mode");
+
 		}
+		else if (LOWORD(wParam) == 3)
+		{
+			PostQuitMessage(0);
+		}
+
 		break;
 	}
 	case WM_PAINT:
