@@ -15,9 +15,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		int midX = (int)(rc.right * 0.5f);
 		int midY = (int)(rc.bottom * 0.5f);
 
-		WinMan::CreateMainMenu(hwnd, msg, wParam, lParam);
-		WinMan::CreateServerMenu(hwnd, msg, wParam, lParam);
-		WinMan::CreateClientMenu(hwnd, msg, wParam, lParam);
+		WinMan::CreateAppHandles(hwnd, msg, wParam, lParam);
 
 		break;
 	}
@@ -42,57 +40,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
-//
-//int main()
-//{
-//	/*std::cout << "Server (1) or Client (2): ";
-//	
-//	int opt = 0;
-//	std::string buf = "";
-//
-//	do 
-//	{ 
-//		std::getline(std::cin, buf, '\n');
-//		std::cin.clear();
-//		
-//		opt = (int)buf[0] - '0';
-//
-//	} while (!(opt == 1 || opt == 2));
-//
-//	opt == 1 ? NET::ServerRun() : NET::ClientRun();*/
-//
-//
-//
-//	// Register the window class.
-//	const wchar_t CLASS_NAME[] = L"Sample Window Class";
-//
-//	WNDCLASS wc = { };
-//
-//	wc.lpfnWndProc = WindowProc;
-//	wc.hInstance = hInstance;
-//	wc.lpszClassName = CLASS_NAME;
-//
-//	HWND hwnd = CreateWindowEx(
-//		0,                              // Optional window styles.
-//		CLASS_NAME,                     // Window class
-//		L"Learn to Program Windows",    // Window text
-//		WS_OVERLAPPEDWINDOW,            // Window style
-//
-//		// Size and position
-//		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-//
-//		NULL,       // Parent window    
-//		NULL,       // Menu
-//		hInstance,  // Instance handle
-//		NULL        // Additional application data
-//	);
-//
-//	if (hwnd == NULL)
-//	{
-//		return 0;
-//	}
-//
-//}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {

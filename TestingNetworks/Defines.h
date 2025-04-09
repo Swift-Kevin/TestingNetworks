@@ -29,8 +29,8 @@ namespace SCREEN
 	const wchar_t CLASS_NAME[] = L"BasicWindow";
 	int winX = CW_USEDEFAULT;
 	int winY = CW_USEDEFAULT;
-	int winWidth = 800;
-	int winHeight = 600;
+	int winWidth = 600;
+	int winHeight = 800;
 }
 
 struct NetInfo {
@@ -43,3 +43,6 @@ struct ClientStorage {
 	sockaddr_in addr;
 	char* name = nullptr;
 };
+
+#define ID_EXIT 10001
+#define ID_JOIN 10002
