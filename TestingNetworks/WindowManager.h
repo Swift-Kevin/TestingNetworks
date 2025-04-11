@@ -15,12 +15,17 @@ struct MainMenuHandles {
 // Client Window Unique HWNDs
 HWND clientMenu;
 struct ClientWindowHandles {
+	HWND ipLabel;
 	HWND ipField;
+	HWND portLabel;
 	HWND portField;
+	HWND usernameLabel;
 	HWND usernameField;
 	HWND joinButton;
+	HWND joinLabel;
 	HWND exitButton;
 	HWND historyBox;
+	HWND messageLabel;
 	HWND messageField;
 } clientWindows;
 
@@ -57,13 +62,18 @@ namespace MyWinProcs
 	void ToggleClientJoinMenu(byte status)
 	{
 		byte toggle = status ? SW_SHOW : SW_HIDE;
-		
+
 		ShowWindow(clientMenu, toggle);
 		ShowWindow(clientWindows.exitButton, toggle);
 		ShowWindow(clientWindows.ipField, toggle);
 		ShowWindow(clientWindows.portField, toggle);
 		ShowWindow(clientWindows.usernameField, toggle);
 		ShowWindow(clientWindows.joinButton, toggle);
+
+		ShowWindow(clientWindows.ipLabel, toggle);
+		ShowWindow(clientWindows.portLabel, toggle);
+		ShowWindow(clientWindows.usernameLabel, toggle);
+		ShowWindow(clientWindows.joinLabel, toggle);
 	}
 
 	void ToggleClientMenu(byte status)
@@ -76,6 +86,7 @@ namespace MyWinProcs
 		ShowWindow(clientWindows.exitButton, toggle);
 		ShowWindow(clientWindows.historyBox, toggle);
 		ShowWindow(clientWindows.messageField, toggle);
+		ShowWindow(clientWindows.messageLabel, toggle);
 	}
 
 	LRESULT CALLBACK MainMenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -109,6 +120,13 @@ namespace MyWinProcs
 
 			break;
 		}
+		case WM_CTLCOLORSTATIC:
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetBkColor(hdcStatic, RGB(255, 255, 255)); // match gray
+			SetBkMode(hdcStatic, TRANSPARENT);
+			return (INT_PTR)CreateSolidBrush(RGB(255, 255, 255));
+		}
 		default:
 			break;
 		}
@@ -137,10 +155,37 @@ namespace MyWinProcs
 			}
 			else if (LOWORD(wParam) == ID_JOIN) // Go to Client Menu
 			{
-				ToggleClientMenu(SW_SHOW);
-			}
+				// Check all 3 fields
+				wchar_t ip[100], port[100], user[100];
+				GetWindowText(clientWindows.ipField, ip, 100);
+				GetWindowText(clientWindows.portField, port, 100);
+				GetWindowText(clientWindows.usernameField, user, 100);
+				bool ipFilled = wcslen(ip) > 0;
+				bool portFilled = wcslen(port) > 0;
+				bool userFilled = wcslen(user) > 0;
 
+				if (ipFilled && portFilled && userFilled)
+				{
+					ToggleClientMenu(SW_SHOW);
+				}
+				else
+				{
+					SetWindowText(clientWindows.joinLabel, L"Ensure All Fields are filled in");
+				}
+			}
 			break;
+		}
+		case WM_CTLCOLORSTATIC:
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetBkColor(hdcStatic, RGB(255, 255, 255)); // match gray
+			SetBkMode(hdcStatic, TRANSPARENT);
+
+			//byte r = rand() % 120 + 120;
+			//byte g = rand() % 120 + 120;
+			//byte b = rand() % 120 + 120;
+
+			return (INT_PTR)CreateSolidBrush(RGB(255, 255, 255));
 		}
 		default:
 			break;
@@ -153,6 +198,11 @@ namespace MyWinProcs
 	{
 		switch (msg)
 		{
+		case WM_CREATE:
+		{
+			NET::ServerRun();
+			break;
+		}
 		case WM_COMMAND:
 		{
 			HWND top = GetParent(hwnd);
@@ -160,7 +210,7 @@ namespace MyWinProcs
 			{
 				SendMessage(top, msg, wParam, lParam);
 			}
-			
+
 			if (LOWORD(wParam) == ID_EXIT) // Go to Main Menu
 			{
 				SetWindowText(top, L"UDP App");
@@ -169,6 +219,13 @@ namespace MyWinProcs
 			}
 
 			break;
+		}
+		case WM_CTLCOLORSTATIC:
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetBkColor(hdcStatic, RGB(255, 255, 255)); // match gray
+			SetBkMode(hdcStatic, TRANSPARENT);
+			return (INT_PTR)CreateSolidBrush(RGB(255, 255, 255));
 		}
 		default:
 			break;
@@ -282,75 +339,148 @@ namespace WinMan
 			data.hwnd, nullptr, data.hInstance, nullptr
 		);
 
-		clientWindows.exitButton = CreateWindowEx(
-			0, L"BUTTON", L"Exit",
-			WS_CHILD | BS_PUSHBUTTON,
-			500, 0, 100, 100,
-			clientMenu, (HMENU)ID_EXIT, data.hInstance, nullptr
-		);
+		// Exit
+		{
+			clientWindows.exitButton = CreateWindowEx(
+				0, L"BUTTON", L"Exit",
+				WS_CHILD | BS_PUSHBUTTON,
+				500, 0, 100, 100,
+				clientMenu, (HMENU)ID_EXIT, data.hInstance, nullptr
+			);
+		}
 
-		clientWindows.ipField = CreateWindowEx(
-			WS_EX_CLIENTEDGE, L"EDIT", L"",
-			WS_CHILD | ES_AUTOHSCROLL,
-			data.midX - 150,
-			data.midY - 250,
-			300,
-			100,
-			clientMenu, (HMENU)4, data.hInstance, nullptr
-		);
+		// IP
+		{
+			clientWindows.ipField = CreateWindowEx(
+				WS_EX_CLIENTEDGE, L"EDIT", L"",
+				WS_CHILD | ES_AUTOHSCROLL ,
+				data.midX - 150,
+				data.midY - 250,
+				300,
+				100,
+				clientMenu, (HMENU)ID_FIELD_IP, data.hInstance, nullptr
+			);
 
-		clientWindows.portField = CreateWindowEx(
-			WS_EX_CLIENTEDGE, L"EDIT", L"",
-			WS_CHILD | ES_AUTOHSCROLL,
-			data.midX - 150,
-			data.midY - 100,
-			300,
-			100,
-			clientMenu, (HMENU)5, data.hInstance, nullptr
-		);
+			clientWindows.ipLabel = CreateWindowEx(
+				0, L"STATIC", L"IP: ",
+				WS_CHILD | WS_VISIBLE | SS_CENTER,
+				0,
+				data.midY - 265,
+				SCREEN::winWidth,
+				15,
+				clientMenu, nullptr, data.hInstance, nullptr
+			);
+		}
 
-		clientWindows.usernameField = CreateWindowEx(
-			WS_EX_CLIENTEDGE, L"EDIT", L"",
-			WS_CHILD | ES_AUTOHSCROLL,
-			data.midX - 150,
-			data.midY + 50,
-			300,
-			100,
-			clientMenu, (HMENU)5, data.hInstance, nullptr
-		);
+		// Port
+		{
+			clientWindows.portField = CreateWindowEx(
+				WS_EX_CLIENTEDGE, L"EDIT", L"",
+				WS_CHILD | ES_AUTOHSCROLL,
+				data.midX - 150,
+				data.midY - 100,
+				300,
+				100,
+				clientMenu, (HMENU)ID_FIELD_PORT, data.hInstance, nullptr
+			);
 
-		clientWindows.joinButton = CreateWindowEx(
-			0, L"BUTTON", L"Join",
-			WS_CHILD | BS_PUSHBUTTON,
-			data.midX - 50, 
-			data.midY + 200, 
-			100, 
-			100,
-			clientMenu, (HMENU)ID_JOIN, data.hInstance, nullptr
-		);
+			SetWindowText(clientWindows.portField, L"31337");
 
-		clientWindows.historyBox = CreateWindowEx(
-			WS_EX_CLIENTEDGE, L"EDIT", L"",
-			WS_CHILD | ES_AUTOHSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
-			0,
-			100,
-			SCREEN::winWidth,
-			SCREEN::winHeight - 200,
-			clientMenu, (HMENU)6, data.hInstance, nullptr
-		);
+			clientWindows.portLabel = CreateWindowEx(
+				0, L"STATIC", L"Port: ",
+				WS_CHILD | WS_VISIBLE | SS_CENTER,
+				0,
+				data.midY - 115,
+				SCREEN::winWidth,
+				15,
+				clientMenu, nullptr, data.hInstance, nullptr
+			);
+		}
 
-		clientWindows.messageField = CreateWindowEx(
-			WS_EX_CLIENTEDGE, L"EDIT", L"",
-			WS_CHILD | ES_AUTOHSCROLL,
-			0,
-			SCREEN::winHeight - 100,
-			SCREEN::winWidth,
-			100,
-			clientMenu, (HMENU)7, data.hInstance, nullptr
-		);
+		// Username
+		{
+			clientWindows.usernameField = CreateWindowEx(
+				WS_EX_CLIENTEDGE, L"EDIT", L"",
+				WS_CHILD | ES_AUTOHSCROLL,
+				data.midX - 150,
+				data.midY + 50,
+				300,
+				100,
+				clientMenu, (HMENU)ID_FIELD_USERNAME, data.hInstance, nullptr
+			);
+
+			clientWindows.usernameLabel = CreateWindowEx(
+				0, L"STATIC", L"Username: ",
+				WS_CHILD | WS_VISIBLE | SS_CENTER,
+				0,
+				data.midY + 35,
+				SCREEN::winWidth,
+				15,
+				clientMenu, nullptr, data.hInstance, nullptr
+			);
+		}
+
+		// Join
+		{
+			clientWindows.joinButton = CreateWindowEx(
+				0, L"BUTTON", L"Join",
+				WS_CHILD | BS_PUSHBUTTON,
+				data.midX - 50,
+				data.midY + 200,
+				100,
+				100,
+				clientMenu, (HMENU)ID_JOIN, data.hInstance, nullptr
+			);
+
+			clientWindows.joinLabel = CreateWindowEx(
+				0, L"STATIC", L"",
+				WS_CHILD | WS_VISIBLE | SS_CENTER,
+				0,
+				data.midY + 185,
+				SCREEN::winWidth,
+				15,
+				clientMenu, nullptr, data.hInstance, nullptr
+			);
+		}
+
+		// History
+		{
+			clientWindows.historyBox = CreateWindowEx(
+				WS_EX_CLIENTEDGE, L"EDIT", L"",
+				WS_CHILD | ES_AUTOHSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
+				0,
+				100,
+				SCREEN::winWidth,
+				SCREEN::winHeight - 230,
+				clientMenu, (HMENU)6, data.hInstance, nullptr
+			);
+		}
+
+		// Message
+		{
+			clientWindows.messageField = CreateWindowEx(
+				WS_EX_CLIENTEDGE, L"EDIT", L"",
+				WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL,
+				0,
+				SCREEN::winHeight - 120,
+				SCREEN::winWidth,
+				100,
+				clientMenu, (HMENU)7, data.hInstance, nullptr
+			);
+
+			clientWindows.messageLabel = CreateWindowEx(
+				0, L"STATIC", L"Message (max characters 512): ",
+				WS_CHILD | WS_VISIBLE,
+				0,
+				SCREEN::winHeight - 135,
+				SCREEN::winWidth,
+				15,
+				clientMenu, nullptr, data.hInstance, nullptr
+			);
+		}
 
 		SetWindowLongPtr(clientMenu, GWLP_WNDPROC, (LONG_PTR)MyWinProcs::ClientMenuProc);
-	
+
 		ShowWindow(clientWindows.messageField, SW_HIDE);
 		ShowWindow(clientWindows.historyBox, SW_HIDE);
 		ShowWindow(clientWindows.exitButton, SW_HIDE);
@@ -358,6 +488,12 @@ namespace WinMan
 		ShowWindow(clientWindows.portField, SW_HIDE);
 		ShowWindow(clientWindows.usernameField, SW_HIDE);
 		ShowWindow(clientWindows.joinButton, SW_HIDE);
+
+		ShowWindow(clientWindows.ipLabel, SW_HIDE);
+		ShowWindow(clientWindows.portLabel, SW_HIDE);
+		ShowWindow(clientWindows.usernameLabel, SW_HIDE);
+		ShowWindow(clientWindows.messageLabel, SW_HIDE);
+		ShowWindow(clientWindows.joinLabel, SW_HIDE);
 	}
 
 	void CreateServerMenu(ReusedData& data)
@@ -394,7 +530,7 @@ namespace WinMan
 		);
 
 		SetWindowLongPtr(serverMenu, GWLP_WNDPROC, (LONG_PTR)MyWinProcs::ServerMenuProc);
-		
+
 		ShowWindow(serverWindows.historyBox, SW_HIDE);
 		ShowWindow(serverWindows.exitButton, SW_HIDE);
 		ShowWindow(serverWindows.controlBox, SW_HIDE);

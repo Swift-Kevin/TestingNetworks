@@ -44,5 +44,15 @@ struct ClientStorage {
 	char* name = nullptr;
 };
 
-#define ID_EXIT 10001
-#define ID_JOIN 10002
+struct APP_RESULT
+{
+	int errorCode = 0;
+	std::string errorMessage = "";
+	std::string userMessage = "";
+};
+
+#define ID_EXIT				10001
+#define ID_JOIN				10002
+#define ID_FIELD_IP			10003
+#define ID_FIELD_PORT		10004
+#define ID_FIELD_USERNAME	10005

@@ -27,11 +27,14 @@ namespace NET
 	/// <param name="_connection"></param>
 	/// <param name="_debugger"></param>
 	/// <returns></returns>
-	int ShutdownProtocol(int _errorCode, NetInfo& _connection, Debug& _debugger)
+	APP_RESULT ShutdownProtocol(int _errorCode, NetInfo& _connection, Debug& _debugger)
 	{
+		APP_RESULT retVal;
+		retVal.errorCode = _errorCode;
+		
 		NET::CloseConnection(_connection.socket);
 		_debugger.CloseLog();
-		return _errorCode;
+		return retVal;
 	}
 
 	/// <summary>
@@ -40,17 +43,22 @@ namespace NET
 	/// <param name="connection">The Net Struct to use and set up.</param>
 	/// <param name="_ip">The IP to connect to.</param>
 	/// <returns>0 = Successful Setup, otherwise the error code. </returns>
-	int SetupConnection(NetInfo& connection, unsigned long _ip, Debug& _debugger)
+	APP_RESULT SetupConnection(NetInfo& connection, unsigned long _ip, Debug& _debugger)
 	{
+		APP_RESULT retVal = {};
+
 		int error = 0;
 		// we are passing (2,2) in because we want to use Winsock Vers. 2.2 to communicate with
 		if (WSAStartup(MAKEWORD(2, 2), &connection.wsaData) != 0)
 		{
-			// Log Errors
-			Debug::Print("WSAStartup failed.", LogType::Error);
-			_debugger.Log("WSAStartup failed.", LogType::Error);
+			retVal.errorCode = 1;
+			retVal.errorMessage = "WSAStartup Failed.";
 
-			return 1;
+			// Log Errors
+			//Debug::Print("WSAStartup failed.", LogType::Error);
+			//_debugger.Log("WSAStartup failed.", LogType::Error);
+
+			return retVal;
 		}
 
 		// - AF INET = tcp and udp layers 
@@ -64,11 +72,14 @@ namespace NET
 
 			// Log Errors
 			std::string msg = "Socket creation failed! Error Code: " + std::to_string(error);
-			Debug::Print(msg.c_str(), LogType::Error);
-			_debugger.Log(msg.c_str(), LogType::Error);
+			//Debug::Print(msg.c_str(), LogType::Error);
+			//_debugger.Log(msg.c_str(), LogType::Error);
+
+			retVal.errorCode = error;
+			retVal.errorMessage = msg;
 
 			WSACleanup();
-			return error;
+			return retVal;
 		}
 
 		u_long ioMode = 1;
@@ -76,11 +87,14 @@ namespace NET
 		{
 			// Log Errors
 			std::string msg = "ioctlsocket failed with error: " + std::to_string(WSAGetLastError());
-			Debug::Print(msg.c_str(), LogType::Error);
-			_debugger.Log(msg.c_str(), LogType::Error);
+			//Debug::Print(msg.c_str(), LogType::Error);
+			//_debugger.Log(msg.c_str(), LogType::Error);
+
+			retVal.errorCode = WSAGetLastError();
+			retVal.errorMessage = msg;
 
 			WSACleanup();
-			return error;
+			return retVal;
 		}
 
 		connection.addr.sin_family = AF_INET;
@@ -92,10 +106,13 @@ namespace NET
 			Server Binds later in its own function
 		*/
 
-		Debug::Print("Started socket.", LogType::System);
-		_debugger.Log("Started socket.", LogType::System);
+		//Debug::Print("Started socket.", LogType::System);
+		//_debugger.Log("Started socket.", LogType::System);
 
-		return 0;
+		retVal.errorCode = error;
+		retVal.errorMessage = "Started Socket";
+
+		return retVal;
 	}
 
 	/// <summary>
@@ -106,8 +123,10 @@ namespace NET
 	/// <param name="_from">The address to receive from.</param>
 	/// <param name="_fromSize">How large the address we are reading in from is.</param>
 	/// <returns>The size in bytes of the message received. -1 = Error in message</returns>
-	int TryRecieve(NetInfo& _connection, char* _buffer, sockaddr* _from, int* _fromSize, Debug& _debugger)
+	APP_RESULT TryRecieve(NetInfo& _connection, char* _buffer, sockaddr* _from, int* _fromSize, Debug& _debugger)
 	{
+		APP_RESULT retVal = {};
+
 		int msgByteSize = recvfrom(_connection.socket, _buffer, TOTAL_BUFFER_SIZE, 0, _from, _fromSize);
 
 		// Was there in an error in recvfrom
@@ -115,21 +134,21 @@ namespace NET
 		{
 			int lastErr = WSAGetLastError();
 
-			if (lastErr == WSAEWOULDBLOCK)
+			if (lastErr == WSAEWOULDBLOCK || lastErr == WSAEINVAL)
 			{
-				return WSAEWOULDBLOCK;
-			}
-			else if (lastErr == WSAEINVAL)
-			{
-				return lastErr;
+				retVal.errorCode = lastErr;
+				return retVal;
 			}
 			else
 			{
 				// Log Errors
 				std::string msg = "recvfrom failed! Error Code: " + std::to_string(lastErr);
-				Debug::Print(msg.c_str(), LogType::Error);
+				//Debug::Print(msg.c_str(), LogType::Error);
 				_debugger.Log(msg.c_str(), LogType::Error);
-				return -1;
+
+				retVal.errorCode = -1;
+				retVal.errorMessage = msg;
+				return retVal;
 			}
 		}
 
@@ -144,21 +163,23 @@ namespace NET
 			msgByteSize = 0;
 		}
 
-		return msgByteSize;
+		retVal.errorCode = msgByteSize;
+
+		return retVal;
 	}
 
 	/// <summary>
 	/// Main Functionality for Running the Server
 	/// </summary>
 	/// <returns>Any errors found </returns>
-	int ServerRun()
+	APP_RESULT ServerRun()
 	{
+		APP_RESULT retVal = {};
+
 		// WSA Data is used to start up the windows sockets.
 		NetInfo serverInfo;
-		std::string ip = "";
 
 		// Multiple Clients
-		//std::map<sockaddr_in, std::string> connectedClients;
 		std::vector<ClientStorage> connectedClients;
 
 		// Start custom debugger (log files / messages)
@@ -168,23 +189,25 @@ namespace NET
 		// Buffer to read in messages
 		char buffer[TOTAL_BUFFER_SIZE];
 
-		int errorCode = NET::SetupConnection(serverInfo, ADDR_ANY, debugger);
-		if (errorCode) { return ShutdownProtocol(errorCode, serverInfo, debugger); }
+		retVal = NET::SetupConnection(serverInfo, ADDR_ANY, debugger);
+		if (retVal.errorCode) { return ShutdownProtocol(retVal.errorCode, serverInfo, debugger); }
 
 		// binds the udp socket to the socket of the server address
 		// makes sure theres no binding error
 		if (bind(serverInfo.socket, (sockaddr*)&serverInfo.addr, sizeof(serverInfo.addr)) == SOCKET_ERROR)
 		{
 			std::string msg = "Bind failed! Error Code: " + std::to_string(WSAGetLastError());
-			Debug::Print(msg.c_str() + SERVER_PORT, LogType::System);
+			//Debug::Print(msg.c_str() + SERVER_PORT, LogType::System);
 			debugger.Log(msg.c_str() + SERVER_PORT, LogType::System);
 
-			return ShutdownProtocol(WSAGetLastError(), serverInfo, debugger);
+			retVal.errorMessage = msg;
+			retVal.errorCode = WSAGetLastError();
+			return ShutdownProtocol(retVal.errorCode, serverInfo, debugger);
 		}
 
 		// Print Success
 		std::string msg = "UDP Server Running.";
-		Debug::Print(msg.c_str(), LogType::System);
+		//Debug::Print(msg.c_str(), LogType::System);
 		debugger.Log(msg.c_str(), LogType::System);
 
 		// Print IP
@@ -204,7 +227,6 @@ namespace NET
 		clientAddr.sin_addr.s_addr = inet_addr(UTIL::GetIP().c_str());
 
 		int clientAddrSize = sizeof(clientAddr);
-		int sizeOfBytesRecv = 0;
 		UTIL::BufferTypes bufferType;
 
 		bool runServer = true;
@@ -220,11 +242,11 @@ namespace NET
 				runServer = false;
 			}
 
-			sizeOfBytesRecv = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
+			retVal = NET::TryRecieve(serverInfo, buffer, (sockaddr*)&clientAddr, &clientAddrSize, debugger);
 
 			// Check for errors
-			if (sizeOfBytesRecv == WSAEWOULDBLOCK) { continue; }
-			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+			if (retVal.errorCode == WSAEWOULDBLOCK) { continue; }
+			if (retVal.errorCode == SOCKET_ERROR) { break; }
 
 			bufferType = (UTIL::BufferTypes)((char)buffer[0]);
 
@@ -370,17 +392,19 @@ namespace NET
 
 	void ClientRecv(ThreadInfo* _ti)
 	{
+		APP_RESULT retVal = {};
+
 		while (_ti->runThreadLoop)
 		{
 			// Receive response from server
 			sockaddr_in fromAddr;
 			int fromLen = sizeof(fromAddr);
 
-			int sizeOfBytesRecv = NET::TryRecieve(_ti->netInfo, _ti->buffer, (sockaddr*)&fromAddr, &fromLen, _ti->debugger);
+			retVal = NET::TryRecieve(_ti->netInfo, _ti->buffer, (sockaddr*)&fromAddr, &fromLen, _ti->debugger);
 			// if it would have blocked, skip over it.
-			if (sizeOfBytesRecv == WSAEWOULDBLOCK || sizeOfBytesRecv == WSAEINVAL) { continue; }
+			if (retVal.errorCode == WSAEWOULDBLOCK || retVal.errorCode == WSAEINVAL) { continue; }
 			// If it was an error, get out of the loop
-			if (sizeOfBytesRecv == SOCKET_ERROR) { break; }
+			if (retVal.errorCode == SOCKET_ERROR) { break; }
 
 			// Erase current line (asks for users input)
 			std::cout << "\r" << '\n' << "\x1b[A";
@@ -408,8 +432,10 @@ namespace NET
 	/// - Should not use a Debug object.
 	/// </summary>
 	/// <returns>Any errors found </returns>
-	int ClientRun()
+	APP_RESULT ClientRun()
 	{
+		APP_RESULT retVal = {};
+
 		std::string clientName = UTIL::UserInputMsg("Display Name (1-15 characters): ", 15);
 
 		// Get IP to connect to from user
@@ -428,8 +454,8 @@ namespace NET
 		char clientBuffer[TOTAL_BUFFER_SIZE] = { 0 };
 		char serverBuffer[TOTAL_BUFFER_SIZE] = { 0 };
 
-		int errorCode = NET::SetupConnection(clientInfo, inet_addr(userEnteredIP.c_str()), debugger);
-		if (errorCode) { return ShutdownProtocol(errorCode, clientInfo, debugger); }
+		retVal = NET::SetupConnection(clientInfo, inet_addr(userEnteredIP.c_str()), debugger);
+		if (retVal.errorCode) { return ShutdownProtocol(retVal.errorCode, clientInfo, debugger); }
 
 		// Send name over to server
 		clientName = (char)UTIL::BufferTypes::Join + clientName + '\0';
